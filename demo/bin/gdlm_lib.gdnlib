@@ -1,0 +1,17 @@
+[general]
+
+singleton=false
+load_once=true
+symbol_prefix="godot_"
+
+[entry]
+
+X11.64="res://bin/libgdleapmotion.so"
+Windows.64="res://bin/libgdleapmotion.dll"
+OSX.64="res://bin/libgdleapmotion.dylib"
+
+[dependencies]
+
+X11.64=[]
+Windows=["res://bin/LeapC.dll"]
+OSX.64=[]
