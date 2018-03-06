@@ -7,8 +7,8 @@ func _ready():
 	leap_motion = preload("res://bin/gdlm_sensor.gdns").new()
 	
 	# Tell it what scenes to load when a new hand is detected
-	leap_motion.set_left_hand_scene(preload("res://LeapMotion/left_hand.tscn"))
-	leap_motion.set_right_hand_scene(preload("res://LeapMotion/right_hand.tscn"))
+	leap_motion.set_left_hand_scene(preload("res://LeapMotion/left_hand_with_collisions.tscn"))
+	leap_motion.set_right_hand_scene(preload("res://LeapMotion/right_hand_with_collisions.tscn"))
 	
 	# add this as a child node to our scene
 	add_child(leap_motion)
