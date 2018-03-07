@@ -221,51 +221,22 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 	if (p_hand_data->scene == NULL)
 		return;
 
-	// get our position
-	Vector3 hand_position(
-		p_lead_hand->palm.position.x * world_scale, 
-		p_lead_hand->palm.position.y * world_scale, 
-		p_lead_hand->palm.position.z * world_scale
-	);
-
-	// orientation of our hand calculated by axis...
-	LEAP_BONE* middle_metacarpal = &p_lead_hand->digits[2].bones[0];
-	LEAP_BONE* ring_metacarpal = &p_lead_hand->digits[3].bones[0];
-
-	Vector3 axis_z( // point forward (might do this from the middle of middle and ring...)
-		((middle_metacarpal->next_joint.x * world_scale) - hand_position.x),
-		((middle_metacarpal->next_joint.y * world_scale) - hand_position.y),
-		((middle_metacarpal->next_joint.z * world_scale) - hand_position.z)
-	);
-	axis_z.normalize();
-
-	Vector3 axis_x( // points left
-		(middle_metacarpal->next_joint.x - ring_metacarpal->next_joint.x),
-		(middle_metacarpal->next_joint.y - ring_metacarpal->next_joint.y),
-		(middle_metacarpal->next_joint.z - ring_metacarpal->next_joint.z)
-	);
-	axis_x.normalize();
-	if (p_hand_data->type == 0) {
-		// flip for left hand
-		axis_x = Vector3(-axis_x.x, -axis_x.y, -axis_x.z);
-	}
-	Vector3 axis_y = axis_z.cross(axis_x).normalized();
-	axis_x = axis_y.cross(axis_z).normalized();
-
-	Basis base_orientation;
-	base_orientation.set_axis(0, axis_x);
-	base_orientation.set_axis(1, axis_y);
-	base_orientation.set_axis(2, axis_z);
-
 	// orientation of our hand using LeapC quarternion
-	// Quat quat(p_lead_hand->palm.orientation.x, p_lead_hand->palm.orientation.y, p_lead_hand->palm.orientation.z, p_lead_hand->palm.orientation.w);
-	// Basis base_orientation(quat);
+	Quat quat(p_lead_hand->palm.orientation.x, p_lead_hand->palm.orientation.y, p_lead_hand->palm.orientation.z, p_lead_hand->palm.orientation.w);
+	Basis base_orientation(quat);
 
 	// apply to our transform
 	hand_transform.set_basis(base_orientation);
 
 	// position of our hand
+	Vector3 hand_position(
+		p_lead_hand->palm.position.x * world_scale, 
+		p_lead_hand->palm.position.y * world_scale, 
+		p_lead_hand->palm.position.z * world_scale
+	);
 	hand_transform.set_origin(hand_position);
+
+	// get our inverse for positioning the rest of the hand
 	Transform hand_inverse = hand_transform.inverse();
 
 	// if in ARVR mode we should xform this to convert from HMD relative position to Origin world position
@@ -277,14 +248,13 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 	for (int d = 0; d < 5; d++) {
 		LEAP_DIGIT* digit = &p_lead_hand->digits[d];
 		LEAP_BONE* bone = &digit->bones[0];
-		int64_t bone_idx;
 
 		// logic for positioning stuff
 		Transform parent_inverse = hand_inverse;
 		Vector3 up = Vector3(0.0, 1.0, 0.0);
 		Transform bone_pose;
 
-		// Our first bone actually starts 
+		// Our first bone provides our starting position for our first node 
 		Vector3 bone_start_pos(
 			bone->prev_joint.x * world_scale,
 			bone->prev_joint.y * world_scale,
@@ -296,33 +266,39 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 		// For now assume order, we may change this to naming, we should cache this, maybe do this when we load our scene.
 		Spatial *digit_node = p_hand_data->finger_nodes[d];
 		if (digit_node != NULL) {
-			// And handle our bones. Note that for our thumb one bone has a zero length
+			// And handle our bones.
 			int first_bone = d == 0 ? 1 : 0; // we skip the first bone for our thumb
 			for (int b = first_bone; b < 4; b++) {
 				bone = &digit->bones[b];
 
-				// We calculate rotation with our axis
+				// We calculate rotation with LeapC's quarternion, I couldn't get this to work right.
+				// This gives our rotation in world space which we need to change to the rotation diffence
+				// between this node and the previous one. Somehow it gets the axis wrong...
+				// Should revisit it some day, if we do this code becomes much simpler :)
+				// Quat quat(bone->rotation.x, bone->rotation.y, bone->rotation.z, bone->rotation.w);
+				// Basis bone_rotation(quat);
+
+				// We calculate rotation based on our next joint position
 				Vector3 bone_pos(
 					bone->next_joint.x * world_scale, 
 					bone->next_joint.y * world_scale, 
 					bone->next_joint.z * world_scale
 				);
 
+				// transform it based on our last locale
 				bone_pos = parent_inverse.xform(bone_pos);
+				// remove previous position to get our delta
 				bone_pos -= bone_pose.origin;
 
-				axis_z = bone_pos;
+				// Standard cross normalise with up to create our matrix. Could fail on a 90 degree bend.
+				Vector3 axis_z = bone_pos;
 				axis_z.normalize();
-				axis_x = up.cross(axis_z).normalized();
-				axis_y = axis_z.cross(axis_x).normalized();
+				Vector3 axis_x = up.cross(axis_z).normalized();
+				Vector3 axis_y = axis_z.cross(axis_x).normalized();
 
 				bone_pose.basis.set_axis(0, axis_x);
 				bone_pose.basis.set_axis(1, axis_y);
 				bone_pose.basis.set_axis(2, axis_z);
-
-				// We calculate rotation with LeapC's quarternion
-				// Quat quat(bone->rotation.x, bone->rotation.y, bone->rotation.z, bone->rotation.w);
-				// Basis bone_rotation(quat);
 
 				if (digit_node != NULL) {
 					// now we can set our parent
@@ -334,7 +310,7 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 				// and update for next iteration
 				parent_inverse = bone_pose.inverse() * parent_inverse;
 
-				// Our next origin
+				// Our next nodes origin...
 				bone_pose.origin = Vector3(0.0, 0.0, bone_pos.length());
 			}
 
@@ -402,7 +378,9 @@ GDLMSensor::hand_data* GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
 void GDLMSensor::delete_hand(GDLMSensor::hand_data* p_hand_data){
 	// this should free everything up and invalidate it, no need to do anything more...
 	if (p_hand_data->scene != NULL) {
-		owner->remove_child(p_hand_data->scene);
+		// hide and then queue free, this will properly destruct our scene and remove it from our tree
+		p_hand_data->scene->hide();
+		p_hand_data->scene->queue_free();
 	}
 
 	free(p_hand_data);
@@ -412,7 +390,7 @@ void GDLMSensor::delete_hand(GDLMSensor::hand_data* p_hand_data){
 void GDLMSensor::_physics_process(float delta) {
 	world_scale = 0.001; // We're getting our measurements in mm, want them in m
 
-	// if we're in ARVR mode we should get our ARVR world scale!
+	// if we're in ARVR mode we should get our ARVR world scale and multiply it with our scale here
 
 	// ok lets process our last frame. Note that leap motion says it caches these so I'm assuming they 
 	// are valid for a few frames. 
@@ -441,8 +419,8 @@ void GDLMSensor::_physics_process(float delta) {
 		} else {
 			int h = 0;
 
-			// rewrite this to use hand->id in combination with hand->type to find which hand this is
-			// maybe then we can also make this a one dimentional array again or a dictionary... 
+			// rewrite this to use hand->id in combination with hand->type to find it in
+			// a vector or something.  
 
 			for (uint32_t fh = 0; fh < frame->nHands; fh++) {
 				LEAP_HAND* hand = &frame->pHands[fh];
@@ -460,7 +438,8 @@ void GDLMSensor::_physics_process(float delta) {
 				}
 			}
 
-			// remove hands we're no longer tracking
+			// remove hands we're no longer tracking, possibly add a grace period. Sometimes a hands tracking
+			// is briefly lost and we could reuse it
 			while (h < MAX_HANDS) {
 				if (hand_nodes[hs][h] != NULL) {
 					delete_hand(hand_nodes[hs][h]);
