@@ -1,8 +1,8 @@
 [gd_scene load_steps=5 format=2]
 
 [ext_resource path="res://Main.gd" type="Script" id=1]
-[ext_resource path="res://can.tscn" type="PackedScene" id=2]
-[ext_resource path="res://Tray.tscn" type="PackedScene" id=3]
+[ext_resource path="res://Tray.tscn" type="PackedScene" id=2]
+[ext_resource path="res://can.tscn" type="PackedScene" id=3]
 
 [sub_resource type="SphereMesh" id=1]
 
@@ -18,7 +18,7 @@ script = ExtResource( 1 )
 
 [node name="Camera" type="Camera" parent="." index="0"]
 
-transform = Transform( 1, 0, 0, 0, 0.51128, 0.859413, 0, -0.859413, 0.51128, 0.0166826, 0.622109, 0.213301 )
+transform = Transform( 1, 0, 0, 0, 0.51128, 0.859413, 0, -0.859413, 0.51128, 0.0166826, 0.799352, 0.215881 )
 keep_aspect = 1
 cull_mask = 1048575
 environment = null
@@ -121,27 +121,29 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Can1" parent="." index="5" instance=ExtResource( 2 )]
+[node name="Tray" parent="." index="5" instance=ExtResource( 2 )]
 
-[node name="Can2" parent="." index="6" instance=ExtResource( 2 )]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.296901, 0.017467 )
 
-transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0.0574784 )
+[node name="Can1" parent="Tray" index="10" instance=ExtResource( 3 )]
 
-[node name="Can3" parent="." index="7" instance=ExtResource( 2 )]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.168692, -0.017467 )
 
-transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0.114696 )
+[node name="Can2" parent="Tray" index="11" instance=ExtResource( 3 )]
 
-[node name="Can4" parent="." index="8" instance=ExtResource( 2 )]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.130824, 0.0400114 )
 
-transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -0.172709, 0.3, 0.114696 )
+[node name="Can3" parent="Tray" index="12" instance=ExtResource( 3 )]
 
-[node name="Can5" parent="." index="9" instance=ExtResource( 2 )]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.130824, 0.097229 )
 
-transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -0.185293, 0.312908, 0.032815 )
+[node name="Can4" parent="Tray" index="13" instance=ExtResource( 3 )]
 
-[node name="Tray" parent="." index="10" instance=ExtResource( 3 )]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -0.172709, 0.130824, 0.097229 )
 
-transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.183092, 0 )
+[node name="Can5" parent="Tray" index="14" instance=ExtResource( 3 )]
+
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -0.185293, 0.143732, 0.015348 )
 
 [connection signal="pressed" from="Quit" to="." method="_on_Quit_pressed"]
 

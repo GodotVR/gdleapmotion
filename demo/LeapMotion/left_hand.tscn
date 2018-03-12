@@ -5,7 +5,7 @@
 [ext_resource path="res://LeapMotion/left_hand_material.tres" type="Material" id=3]
 [ext_resource path="res://LeapMotion/bone_material.tres" type="Material" id=4]
 
-[sub_resource type="SphereMesh" id=5]
+[sub_resource type="SphereMesh" id=1]
 
 material = ExtResource( 1 )
 radius = 0.015
@@ -44,7 +44,7 @@ lod_min_distance = 0.0
 lod_min_hysteresis = 0.0
 lod_max_distance = 0.0
 lod_max_hysteresis = 0.0
-mesh = SubResource( 5 )
+mesh = SubResource( 1 )
 skeleton = NodePath("..")
 material/0 = null
 script = ExtResource( 2 )
@@ -52,7 +52,6 @@ _sections_unfolded = [ "material" ]
 
 [node name="Thumb" type="MeshInstance" parent="." index="0"]
 
-editor/display_folded = true
 transform = Transform( 0.946029, 0, -0.324081, 0, 1, 0, 0.324081, 0, 0.946029, -0.0993336, 0, 0 )
 layers = 1
 material_override = null
@@ -172,7 +171,6 @@ _sections_unfolded = [ "Transform" ]
 
 [node name="Index" type="MeshInstance" parent="." index="1"]
 
-editor/display_folded = true
 transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0536953, 0, -0.000880256 )
 layers = 1
 material_override = null

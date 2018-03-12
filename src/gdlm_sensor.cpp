@@ -7,6 +7,8 @@ void GDLMSensor::_register_methods() {
 	register_method((char *)"get_is_connected", &GDLMSensor::get_is_connected);
 	register_method((char *)"set_left_hand_scene", &GDLMSensor::set_left_hand_scene);
 	register_method((char *)"set_right_hand_scene", &GDLMSensor::set_right_hand_scene);
+	register_method((char *)"get_arvr", &GDLMSensor::get_arvr);
+	register_method((char *)"set_arvr", &GDLMSensor::set_arvr);
 	register_method((char *)"_physics_process", &GDLMSensor::_physics_process);
 	register_method((char *)"get_finger_name", &GDLMSensor::get_finger_name);
 	register_method((char *)"get_finger_bone_name", &GDLMSensor::get_finger_bone_name);
@@ -16,6 +18,7 @@ GDLMSensor::GDLMSensor() {
 	lm_thread = NULL;
 	is_running = false;
 	is_connected = false;
+	arvr = false;
 	last_frame = NULL;
 	last_device = NULL;
 	last_frame_id = 0;
@@ -34,6 +37,7 @@ GDLMSensor::GDLMSensor() {
 			lm_thread = new std::thread(GDLMSensor::lm_main, this);
 		} else {
 			LeapDestroyConnection(leap_connection);
+			leap_connection = NULL;
 		}
 	}
 }
@@ -129,6 +133,14 @@ void GDLMSensor::set_is_connected(bool p_set) {
 	unlock();
 }
 
+bool GDLMSensor::wait_for_connection() {
+	while (!get_is_connected()) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+
+	return get_is_connected();
+}
+
 const LEAP_TRACKING_EVENT* GDLMSensor::get_last_frame() {
 	const LEAP_TRACKING_EVENT* ret;
 
@@ -174,6 +186,26 @@ void GDLMSensor::set_last_device(const LEAP_DEVICE_INFO* p_device) {
 	memcpy(last_device->serial, p_device->serial, p_device->serial_length);
 
 	unlock();
+}
+
+bool GDLMSensor::get_arvr() {
+	return arvr;
+}
+
+void GDLMSensor::set_arvr(bool p_set) {
+	if (arvr != p_set) {
+		if (leap_connection != NULL) {
+			arvr = p_set;
+			wait_for_connection();
+			if (arvr) {
+				printf("Setting arvr to true\n");
+				LeapSetPolicyFlags(leap_connection, eLeapPolicyFlag_OptimizeHMD, 0);
+			} else {
+				printf("Setting arvr to false\n");
+				LeapSetPolicyFlags(leap_connection, 0, eLeapPolicyFlag_OptimizeHMD);
+			}
+		}
+	}
 }
 
 void GDLMSensor::set_left_hand_scene(Ref<PackedScene> p_resource) {
@@ -583,10 +615,20 @@ void GDLMSensor::handleLogEvent(const LEAP_LOG_EVENT *log_event) {
 }
 
 void GDLMSensor::handlePolicyEvent(const LEAP_POLICY_EVENT *policy_event) {
-	// do something with this?
-
 	// just log for now
-	printf("LeapMotion - policy event\n");
+	printf("LeapMotion - policy event");
+
+	if (policy_event->current_policy & eLeapPolicyFlag_BackgroundFrames) {
+		printf(", background frames");
+	}
+	if (policy_event->current_policy & eLeapPolicyFlag_OptimizeHMD ) {
+		printf(", optimised for HMD");
+	}
+	if (policy_event->current_policy & eLeapPolicyFlag_AllowPauseResume  ) {
+		printf(", allow pause and resume");
+	}
+
+	printf("\n");
 }
 
 void GDLMSensor::handleConfigChangeEvent(const LEAP_CONFIG_CHANGE_EVENT *config_change_event) {

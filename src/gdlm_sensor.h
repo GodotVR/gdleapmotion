@@ -9,6 +9,7 @@
 #include <Skeleton.hpp>
 #include <thread>
 #include <mutex>
+#include <chrono>
 
 // include leap motion library
 #include <LeapC.h>
@@ -27,6 +28,7 @@ private:
 	long long int last_frame_id;
 	bool is_running;
 	bool is_connected;
+	bool arvr;
 
 	std::thread * lm_thread;
 	std::mutex lm_mutex;
@@ -80,6 +82,8 @@ protected:
 	void set_is_running(bool p_set);
 	void set_is_connected(bool p_set);
 
+	bool wait_for_connection();
+
 	void update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_lead_hand);
 
 public:
@@ -91,6 +95,9 @@ public:
 
 	String get_finger_name(int p_idx);
 	String get_finger_bone_name(int p_idx);
+
+	bool get_arvr();
+	void set_arvr(bool p_set);
 
 	GDLMSensor();
 	~GDLMSensor();
