@@ -4,7 +4,7 @@ import os, subprocess
 # Local dependency paths, adapt them to your setup
 godot_headers_path = ARGUMENTS.get("headers", "godot_headers/")
 cpp_bindings_path = ARGUMENTS.get("cpp_bindings_path", "godot-cpp/")
-cpp_bindings_library_path = ARGUMENTS.get("cpp_bindings_library", "godot-cpp/bin/godot_cpp_bindings")
+cpp_bindings_library_path = ARGUMENTS.get("cpp_bindings_library", "godot-cpp/bin/godot-cpp")
 leapsdk_path = ARGUMENTS.get("leapsdk_path", "C:/Users/basti/Development/LeapDeveloperKit_3.2.1+45911_win/LeapSDK/")
 
 target = ARGUMENTS.get("target", "debug")
@@ -56,7 +56,7 @@ elif platform == "windows":
     final_lib_path = final_lib_path + 'win' + str(bits) + '/'
 
 env.Append(CPPPATH=['.', 'src/', godot_headers_path, cpp_bindings_path + 'include/', cpp_bindings_path + 'include/core/', leapsdk_path + 'include/'])
-env.Append(LIBS=[cpp_bindings_library_path, leapsdk_lib])
+env.Append(LIBS=[cpp_bindings_library_path + "." + platform + "." + str(bits), leapsdk_lib])
 
 sources = []
 add_sources(sources, "src")

@@ -123,7 +123,7 @@ max_lines_visible = -1
 
 [node name="Tray" parent="." index="5" instance=ExtResource( 2 )]
 
-transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.296901, 0.017467 )
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2149, -0.159427 )
 
 [node name="Can1" parent="Tray" index="10" instance=ExtResource( 3 )]
 
