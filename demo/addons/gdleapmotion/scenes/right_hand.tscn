@@ -1,9 +1,9 @@
 [gd_scene load_steps=8 format=2]
 
-[ext_resource path="res://LeapMotion/center_ball_material.tres" type="Material" id=1]
-[ext_resource path="res://LeapMotion/hand.gd" type="Script" id=2]
-[ext_resource path="res://LeapMotion/right_hand_material.tres" type="Material" id=3]
-[ext_resource path="res://LeapMotion/bone_material.tres" type="Material" id=4]
+[ext_resource path="res://addons/gdleapmotion/scenes/center_ball_material.tres" type="Material" id=1]
+[ext_resource path="res://addons/gdleapmotion/scenes/hand.gd" type="Script" id=2]
+[ext_resource path="res://addons/gdleapmotion/scenes/right_hand_material.tres" type="Material" id=3]
+[ext_resource path="res://addons/gdleapmotion/scenes/bone_material.tres" type="Material" id=4]
 
 [sub_resource type="SphereMesh" id=1]
 
