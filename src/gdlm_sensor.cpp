@@ -1,5 +1,7 @@
 #include "gdlm_sensor.h"
 
+#define PI 3.14159265359
+
 using namespace godot;
 
 void GDLMSensor::_register_methods() {
@@ -9,19 +11,29 @@ void GDLMSensor::_register_methods() {
 	register_method((char *)"set_right_hand_scene", &GDLMSensor::set_right_hand_scene);
 	register_method((char *)"get_arvr", &GDLMSensor::get_arvr);
 	register_method((char *)"set_arvr", &GDLMSensor::set_arvr);
+	register_method((char *)"get_smooth_factor", &GDLMSensor::get_smooth_factor);
+	register_method((char *)"set_smooth_factor", &GDLMSensor::set_smooth_factor);
+	register_method((char *)"get_hmd_to_leap_motion", &GDLMSensor::get_hmd_to_leap_motion);
+	register_method((char *)"set_hmd_to_leap_motion", &GDLMSensor::set_hmd_to_leap_motion);
 	register_method((char *)"_physics_process", &GDLMSensor::_physics_process);
 	register_method((char *)"get_finger_name", &GDLMSensor::get_finger_name);
 	register_method((char *)"get_finger_bone_name", &GDLMSensor::get_finger_bone_name);
 }
 
 GDLMSensor::GDLMSensor() {
+	clock_synchronizer = NULL;
 	lm_thread = NULL;
 	is_running = false;
 	is_connected = false;
 	arvr = false;
+	smooth_factor = 0.5;
 	last_frame = NULL;
 	last_device = NULL;
 	last_frame_id = 0;
+
+	// assume rotated by 90 degrees on x axis and -180 on Y and 8cm from center
+	hmd_to_leap_motion.basis = Basis(Vector3(90.0 * PI / 180.0, -180.0 * PI / 180.0, 0.0));
+	hmd_to_leap_motion.origin = Vector3(0.0, 0.0, -0.08);
 
 	for (int hs = 0; hs < 2; hs++) {
 		for (int h = 0; h < MAX_HANDS; h++) {
@@ -59,6 +71,10 @@ GDLMSensor::~GDLMSensor() {
 	}
 
 	// our thread should no longer be running so save to clean up..
+	if (clock_synchronizer != NULL) {
+		LeapDestroyClockRebaser(clock_synchronizer);
+		clock_synchronizer = NULL;
+	}
 	if (leap_connection != NULL) {
 		LeapDestroyConnection(leap_connection);
 		leap_connection = NULL;
@@ -128,8 +144,17 @@ bool GDLMSensor::get_is_connected() {
 
 void GDLMSensor::set_is_connected(bool p_set) {
 	lock();
-	is_connected = p_set;
-	// maybe issue signal?
+	if (is_connected != p_set) {
+		is_connected = p_set;
+		if (p_set) {
+			LeapCreateClockRebaser(&clock_synchronizer);
+		} else if (clock_synchronizer != NULL) {
+			LeapDestroyClockRebaser(clock_synchronizer);
+			clock_synchronizer = NULL;
+		}
+
+		// maybe issue signal?
+	}
 	unlock();
 }
 
@@ -208,6 +233,22 @@ void GDLMSensor::set_arvr(bool p_set) {
 	}
 }
 
+float GDLMSensor::get_smooth_factor() {
+	return smooth_factor;
+}
+
+void GDLMSensor::set_smooth_factor(float p_smooth_factor) {
+	smooth_factor = p_smooth_factor;
+}
+
+Transform GDLMSensor::get_hmd_to_leap_motion() {
+	return hmd_to_leap_motion;
+}
+
+void GDLMSensor::set_hmd_to_leap_motion(Transform p_transform) {
+	hmd_to_leap_motion = p_transform;
+}
+
 void GDLMSensor::set_left_hand_scene(Ref<PackedScene> p_resource) {
 	hand_scenes[0] = p_resource;
 }
@@ -272,6 +313,15 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 	Transform hand_inverse = hand_transform.inverse();
 
 	// if in ARVR mode we should xform this to convert from HMD relative position to Origin world position
+	if (arvr) {
+		Transform last_transform = p_hand_data->scene->get_transform();
+		hand_transform = hmd_transform * hmd_to_leap_motion * hand_transform;
+
+		// leap motions frame interpolation is pretty good but we're going to smooth things out a little bit
+		// to stop hands from visible drifting when the user turns his/her head. We can live with the position
+		// of the hand being a few frames behind
+		hand_transform.origin = last_transform.origin.linear_interpolate(hand_transform.origin, smooth_factor);
+	};
 
 	// and apply
 	p_hand_data->scene->set_transform(hand_transform);
@@ -420,18 +470,76 @@ void GDLMSensor::delete_hand(GDLMSensor::hand_data* p_hand_data){
 
 // our Godot physics process, runs within the physic thread and is responsible for updating physics related stuff
 void GDLMSensor::_physics_process(float delta) {
-	world_scale = 0.001; // We're getting our measurements in mm, want them in m
+	LEAP_TRACKING_EVENT* interpolated_frame = NULL;
+	const LEAP_TRACKING_EVENT* frame = NULL;
+	uint64_t arvr_frame_usec;
 
-	// if we're in ARVR mode we should get our ARVR world scale and multiply it with our scale here
+	// We're getting our measurements in mm, want them in m
+	world_scale = 0.001; 
 
-	// ok lets process our last frame. Note that leap motion says it caches these so I'm assuming they 
-	// are valid for a few frames. 
-	const LEAP_TRACKING_EVENT* frame = get_last_frame();
+	// get some arvr stuff
+	if (arvr) {
+		// At this point in time our timing is such that last_process_usec + last_frame_usec = last_commit_usec
+		// and it will be the frame previous to the one we're rendering and it will be the frame get_hmd_transform relates to.
+		// Once we start running rendering in a separate thread last_commit_usec will still be the last frame
+		// but last_process_usec will be newer and get_hmd_transform could be more up to date.
+		// last_frame_usec will be an average. 
+		// We probably should put this whole thing into a mutex with the render thread once the time is right.
+		// For now however.... :)
+
+		world_scale *= ARVRServer::get_world_scale();
+		hmd_transform = ARVRServer::get_hmd_transform();
+		arvr_frame_usec = ARVRServer::get_last_process_usec() + ARVRServer::get_last_frame_usec();
+	}
+
+	// update our timing
+	if (clock_synchronizer != NULL) {
+		uint64_t godot_usec = OS::get_ticks_msec() * 1000; // why does godot not give us usec while it records it, grmbl...
+		uint64_t leap_usec = LeapGetNow();
+		LeapUpdateRebase(clock_synchronizer, godot_usec, leap_usec);		
+	}
+
+	// get our frame, either interpolated or latest
+	if (arvr && clock_synchronizer != NULL) {
+		// Get our leap motion clock value at the timing on which we expect our hmd_transform to be.
+		// This will never be exact science as we do not know how much of a timewarp Oculus/OpenVR has applied..
+		int64_t leap_target_usec;
+		uint64_t target_frame_size;
+		LeapRebaseClock(clock_synchronizer, arvr_frame_usec, &leap_target_usec);
+
+		// we need to allocate the right amount of memory to store our interpolated frame data at our timestamp
+		eLeapRS result = LeapGetFrameSize(leap_connection, leap_target_usec, &target_frame_size);
+		if (result == eLeapRS_Success) {
+			// get some space
+			interpolated_frame = (LEAP_TRACKING_EVENT *) malloc((size_t)target_frame_size);
+			if (interpolated_frame != NULL) {
+				// and lets get our interpolated frame!!
+				result = LeapInterpolateFrame(leap_connection, leap_target_usec, interpolated_frame, target_frame_size);
+				if (result == eLeapRS_Success) {
+					// copy pointer so we can use the same logic as when we call get_last_frame..
+					frame = interpolated_frame;
+				} else {
+					// this is not good... need to add some error handling here.
+
+					// clean up so we exit..
+					free(interpolated_frame);
+					interpolated_frame = NULL;
+				}
+			}
+		}
+	} else {
+		// ok lets process our last frame. Note that leap motion says it caches these so I'm assuming they 
+		// are valid for a few frames. 
+		frame = get_last_frame();
+	}
+
+	// was everything above successful?
 	if (frame == NULL) {
-		// we don't have a frame yet
+		// we don't have a frame yet, or we failed upstairs..
 		return;
-	} else if (last_frame_id == frame->info.frame_id) {
-		// already processed this, do we really want to skip this or are we going to timewarp this?
+	} else if (!arvr && (last_frame_id == frame->info.frame_id)) {
+		// we already parsed this, no need to do this. In ARVR we may need to do more
+		return;
 	}
 
 	last_frame_id = frame->info.frame_id;
@@ -481,6 +589,11 @@ void GDLMSensor::_physics_process(float delta) {
 				h++;
 			}
 		}
+	}
+
+	// free our buffer if we allocated it
+	if (interpolated_frame != NULL) {
+		free(interpolated_frame);
 	}
 }
 

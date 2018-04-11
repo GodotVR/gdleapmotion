@@ -2,11 +2,14 @@
 #define GDLM_SENSOR_H
 
 #include <Godot.hpp>
+#include <OS.hpp>
 #include <GlobalConstants.hpp>
 #include <PackedScene.hpp>
 #include <Transform.hpp>
 #include <Spatial.hpp>
 #include <Skeleton.hpp>
+#include <ARVRServer.hpp>
+#include <ARVRInterface.hpp>
 #include <thread>
 #include <mutex>
 #include <chrono>
@@ -23,12 +26,16 @@ class GDLMSensor : public godot::GodotScript<Spatial> {
 
 private:
 	LEAP_CONNECTION leap_connection;
+	LEAP_CLOCK_REBASER clock_synchronizer;
 	const LEAP_TRACKING_EVENT* last_frame;
 	LEAP_DEVICE_INFO* last_device;
 	long long int last_frame_id;
 	bool is_running;
 	bool is_connected;
 	bool arvr;
+	float smooth_factor;
+	Transform hmd_transform; /* for ARVR only, transform of our primary HMD */
+	Transform hmd_to_leap_motion; /* for ARVR only, transform to adjust leap motion */
 
 	std::thread * lm_thread;
 	std::mutex lm_mutex;
@@ -98,6 +105,12 @@ public:
 
 	bool get_arvr();
 	void set_arvr(bool p_set);
+
+	float get_smooth_factor();
+	void set_smooth_factor(float p_smooth_factor);
+
+	Transform get_hmd_to_leap_motion();
+	void set_hmd_to_leap_motion(Transform p_transform);
 
 	GDLMSensor();
 	~GDLMSensor();
