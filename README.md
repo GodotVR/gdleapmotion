@@ -109,3 +109,13 @@ The second option is far more important. Your leap motion is attached to the fro
 	leap_motion.set_hmd_to_leap_motion(hmd_to_leap)
 ```
 Note that this is a full transform so if your leap motion is attached tilted you can include a rotation as well.
+
+About this repository
+---------------------
+This repository was created by and is maintained by Bastiaan Olij a.k.a. Mux213
+
+You can follow me on twitter for regular updates here:
+https://twitter.com/mux213
+
+Videos about my work with Godot including tutorials can by found on my youtube page:
+https://www.youtube.com/channel/UCrbLJYzJjDf2p-vJC011lYw
