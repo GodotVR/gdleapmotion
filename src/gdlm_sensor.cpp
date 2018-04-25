@@ -5,6 +5,12 @@
 using namespace godot;
 
 void GDLMSensor::_register_methods() {
+	Dictionary args;
+
+	args[Variant("hand")] = Variant(Variant::OBJECT);
+	register_signal<GDLMSensor>((char *)"new_hand", args);
+	register_signal<GDLMSensor>((char *)"about_to_remove_hand", args);
+
 	register_method((char *)"get_is_running", &GDLMSensor::get_is_running);
 	register_method((char *)"get_is_connected", &GDLMSensor::get_is_connected);
 	register_method((char *)"set_left_hand_scene", &GDLMSensor::set_left_hand_scene);
@@ -285,7 +291,31 @@ String GDLMSensor::get_finger_bone_name(int p_idx) {
 	return finger_bone_name;
 }
 
-void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_lead_hand) {
+void GDLMSensor::update_hand_data(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_leap_hand) {
+	Array args;
+
+	if (p_hand_data == NULL)
+		return;
+
+	if (p_hand_data->scene == NULL)
+		return;
+
+	// first pinch distance
+	args.push_back(Variant(p_leap_hand->pinch_distance));
+	p_hand_data->scene->call("set_pinch_distance", args);
+
+	// then pinch strength
+	args.clear();
+	args.push_back(Variant(p_leap_hand->pinch_strength));
+	p_hand_data->scene->call("set_pinch_strength", args);
+
+	// and grab strength
+	args.clear();
+	args.push_back(Variant(p_leap_hand->grab_strength));
+	p_hand_data->scene->call("set_grab_strength", args);
+};
+
+void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_leap_hand) {
 	Transform hand_transform;
 
 	if (p_hand_data == NULL)
@@ -295,7 +325,7 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 		return;
 
 	// orientation of our hand using LeapC quarternion
-	Quat quat(p_lead_hand->palm.orientation.x, p_lead_hand->palm.orientation.y, p_lead_hand->palm.orientation.z, p_lead_hand->palm.orientation.w);
+	Quat quat(p_leap_hand->palm.orientation.x, p_leap_hand->palm.orientation.y, p_leap_hand->palm.orientation.z, p_leap_hand->palm.orientation.w);
 	Basis base_orientation(quat);
 
 	// apply to our transform
@@ -303,9 +333,9 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 
 	// position of our hand
 	Vector3 hand_position(
-		p_lead_hand->palm.position.x * world_scale, 
-		p_lead_hand->palm.position.y * world_scale, 
-		p_lead_hand->palm.position.z * world_scale
+		p_leap_hand->palm.position.x * world_scale, 
+		p_leap_hand->palm.position.y * world_scale, 
+		p_leap_hand->palm.position.z * world_scale
 	);
 	hand_transform.set_origin(hand_position);
 
@@ -328,7 +358,7 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 
 	// lets parse our digits
 	for (int d = 0; d < 5; d++) {
-		LEAP_DIGIT* digit = &p_lead_hand->digits[d];
+		LEAP_DIGIT* digit = &p_leap_hand->digits[d];
 		LEAP_BONE* bone = &digit->bones[0];
 
 		// logic for positioning stuff
@@ -454,12 +484,20 @@ GDLMSensor::hand_data* GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
 		}
 	}
 
+	Array args;
+	args.push_back(Variant(new_hand_data->scene));
+	owner->emit_signal("new_hand", args);
+
 	return new_hand_data;
 }
 
 void GDLMSensor::delete_hand(GDLMSensor::hand_data* p_hand_data){
 	// this should free everything up and invalidate it, no need to do anything more...
 	if (p_hand_data->scene != NULL) {
+		Array args;
+		args.push_back(Variant(p_hand_data->scene));
+		owner->emit_signal("about_to_remove_hand", args);
+
 		// hide and then queue free, this will properly destruct our scene and remove it from our tree
 		p_hand_data->scene->hide();
 		p_hand_data->scene->queue_free();
@@ -572,6 +610,7 @@ void GDLMSensor::_physics_process(float delta) {
 						hand_nodes[hs][h] = new_hand(hs, hand->id);
 					}
 
+					update_hand_data(hand_nodes[hs][h], hand);
 					update_hand_position(hand_nodes[hs][h], hand);
 
 					h++;

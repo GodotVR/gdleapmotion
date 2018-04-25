@@ -29,10 +29,12 @@ Compile our module:
 scons platform=windows leapsdk_path=<path_to_leap_motion_sdk>
 ```
 
+Add ```target=release``` to both scons commands to build a release version of the module.
+
 (for convenience I'm including my latest 64bit compile but I can't guarantee it will consistantly work)
 
 Using Leap Motion in Godot
-==========================
+--------------------------
 There is a small demo application in the demo folder that shows the basics of how the Leap Motion works with Godot as a desktop solution.
 
 The subfolder ```addons``` contains the leap motion driver itself and is also the destination for the compile script. This folder will also be available in the Godot asset library in the near future.
@@ -60,7 +62,7 @@ The next two lines load scenes that will be instantiated when leap motion detect
 Finally the last line adds the leap motion node as a child node to your current scene. It is important that the location of this node within your scene becomes the anchor point for the leap motion. Basically this point maps the physical location of your leap motion device to your virtual world.
 
 Using Leap Motion in Godot with a VR headset
-============================================
+--------------------------------------------
 There isn't an example for this in this repository. I may add one later or create a separate demo project for this but support for this has been added in the latest build. This does require Godot 3.0.3 or newer to run as this version of Godot has support for frame timing.
 
 Using the Leap Motion in VR takes an approach that is not immediately apparant. It would seem logical to instantiate the ```gdlm_sensor.gdns``` node as a child node of the headset. While this will work you'll notice placement issues with the hands when you move your head.
@@ -109,6 +111,32 @@ The second option is far more important. Your leap motion is attached to the fro
 	leap_motion.set_hmd_to_leap_motion(hmd_to_leap)
 ```
 Note that this is a full transform so if your leap motion is attached tilted you can include a rotation as well.
+
+Signals
+-------
+There are a number of signals that you can connect to on the GDNative module, you can do this as follows in your ```_ready``` function:
+```
+	leap_motion.connect("new_hand", self, "new_hand")
+	leap_motion.connect("about_to_remove_hand", self, "about_to_remove_hand")
+```
+
+The ```new_hand``` signal is issued when a new subscene for a hand is instantiated and added. This gives you the opertunity to connect to any signals emitted from these scenes.
+
+The ```about_to_remove_hand``` signal is issued right before the subscene for a hand is removed because tracking is lost.
+
+Right now a subscene is added when the leap motion detects a hand, and removed when it looses tracking. In a future version we'll add tracking signals. 
+
+Pinch and grab
+--------------
+Besides accurate orientation information the leap motion SDK also provides pinch and grab values that allow for more gesture based interactions. Most of the logic for this resided in our ```hand.gd``` which is the code associated with the subscenes we're adding.
+
+The Leap Motion module will call set_pinch_distance, set_pinch_strength and set_grab_strength on the subscenes so these *must* be implemented.
+
+```pinch_distance``` is the estimated distance between the top of your index finger and thumb.
+```pinch_strength``` is the strength of the pinch, a value between 0.0 (finger tips are not touching) and 1.0 (fingers tips are touching)
+```grab_strength``` is the strangth of a grab, a value between 0.0 (fist is open) and 1.0 (fist is closed)
+
+When you look at the code in ```hand.gd``` you can see that we do not just make these values available, we also emit signals based on their value. Note specifically the ```pinched``` and ```grabbed``` signals that are implemented here.
 
 About this repository
 ---------------------

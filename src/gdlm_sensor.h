@@ -8,6 +8,8 @@
 #include <Transform.hpp>
 #include <Spatial.hpp>
 #include <Skeleton.hpp>
+#include <Array.hpp>
+#include <Dictionary.hpp>
 #include <ARVRServer.hpp>
 #include <ARVRInterface.hpp>
 #include <thread>
@@ -91,7 +93,8 @@ protected:
 
 	bool wait_for_connection();
 
-	void update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_lead_hand);
+	void update_hand_data(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_leap_hand);
+	void update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_leap_hand);
 
 public:
 	static void _register_methods();
