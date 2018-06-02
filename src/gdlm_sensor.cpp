@@ -13,17 +13,37 @@ void GDLMSensor::_register_methods() {
 
 	register_method((char *)"get_is_running", &GDLMSensor::get_is_running);
 	register_method((char *)"get_is_connected", &GDLMSensor::get_is_connected);
+	register_method((char *)"get_left_hand_scene", &GDLMSensor::get_left_hand_scene);
 	register_method((char *)"set_left_hand_scene", &GDLMSensor::set_left_hand_scene);
+	register_method((char *)"get_right_hand_scene", &GDLMSensor::get_right_hand_scene);
 	register_method((char *)"set_right_hand_scene", &GDLMSensor::set_right_hand_scene);
 	register_method((char *)"get_arvr", &GDLMSensor::get_arvr);
 	register_method((char *)"set_arvr", &GDLMSensor::set_arvr);
 	register_method((char *)"get_smooth_factor", &GDLMSensor::get_smooth_factor);
 	register_method((char *)"set_smooth_factor", &GDLMSensor::set_smooth_factor);
+	register_method((char *)"get_keep_frames", &GDLMSensor::get_keep_frames);
+	register_method((char *)"set_keep_frames", &GDLMSensor::set_keep_frames);
+	register_method((char *)"get_keep_last_hand", &GDLMSensor::get_keep_last_hand);
+	register_method((char *)"set_keep_last_hand", &GDLMSensor::set_keep_last_hand);
 	register_method((char *)"get_hmd_to_leap_motion", &GDLMSensor::get_hmd_to_leap_motion);
 	register_method((char *)"set_hmd_to_leap_motion", &GDLMSensor::set_hmd_to_leap_motion);
 	register_method((char *)"_physics_process", &GDLMSensor::_physics_process);
 	register_method((char *)"get_finger_name", &GDLMSensor::get_finger_name);
 	register_method((char *)"get_finger_bone_name", &GDLMSensor::get_finger_bone_name);
+
+	register_property<GDLMSensor, bool>((char *)"arvr", &GDLMSensor::set_arvr, &GDLMSensor::get_arvr, false);
+	register_property<GDLMSensor, float>((char *)"smooth_factor", &GDLMSensor::set_smooth_factor, &GDLMSensor::get_smooth_factor, 0.5);
+	register_property<GDLMSensor, int>((char *)"keep_hands_for_frames", &GDLMSensor::set_keep_frames, &GDLMSensor::get_keep_frames, 60);
+	register_property<GDLMSensor, bool>((char *)"keep_last_hand", &GDLMSensor::set_keep_last_hand, &GDLMSensor::get_keep_last_hand, true);
+
+	register_property<GDLMSensor, String>((char *)"left_hand_scene", &GDLMSensor::set_left_hand_scene, &GDLMSensor::get_left_hand_scene, String());
+	register_property<GDLMSensor, String>((char *)"right_hand_scene", &GDLMSensor::set_right_hand_scene, &GDLMSensor::get_right_hand_scene, String());
+
+	// assume rotated by 90 degrees on x axis and -180 on Y and 8cm from center
+	Transform htlp;
+	htlp.basis = Basis(Vector3(90.0 * PI / 180.0, -180.0 * PI / 180.0, 0.0));
+	htlp.origin = Vector3(0.0, 0.0, -0.08);
+	register_property<GDLMSensor, Transform>((char *)"hmd_to_leap_motion", &GDLMSensor::set_hmd_to_leap_motion, &GDLMSensor::get_hmd_to_leap_motion, htlp);
 }
 
 GDLMSensor::GDLMSensor() {
@@ -32,22 +52,18 @@ GDLMSensor::GDLMSensor() {
 	is_running = false;
 	is_connected = false;
 	arvr = false;
+	keep_last_hand = true;
 	smooth_factor = 0.5;
 	last_frame = NULL;
 	last_device = NULL;
 	last_frame_id = 0;
+	keep_hands_for_frames = 60;
 
 	// assume rotated by 90 degrees on x axis and -180 on Y and 8cm from center
 	hmd_to_leap_motion.basis = Basis(Vector3(90.0 * PI / 180.0, -180.0 * PI / 180.0, 0.0));
 	hmd_to_leap_motion.origin = Vector3(0.0, 0.0, -0.08);
 
-	for (int hs = 0; hs < 2; hs++) {
-		for (int h = 0; h < MAX_HANDS; h++) {
-			hand_nodes[hs][h] = NULL;
-		}
-	}
-
- 	eLeapRS result = LeapCreateConnection(NULL, &leap_connection);
+	eLeapRS result = LeapCreateConnection(NULL, &leap_connection);
 	if (result == eLeapRS_Success) {
 		result = LeapOpenConnection(leap_connection);
 		if (result == eLeapRS_Success) {
@@ -98,17 +114,11 @@ GDLMSensor::~GDLMSensor() {
 	// and clear this JIC
 	last_frame = NULL;
 
-	// finally clean up hands
-	for (int hs = 0; hs < 2; hs++) {
-		for (int h = 0; h < MAX_HANDS; h++) {
-			if (hand_nodes[hs][h] != NULL) {
-				// destroying our parent node should already free the children so assume that happens automatically
-				// remove_child(hand_nodes[hs][h]);
-				// delete hand_nodes[hs][h];
-
-				hand_nodes[hs][h] = NULL;
-			}
-		}
+	// finally clean up hands, note that we don't need to free our scenes because they will be removed by Godot.
+	while (hand_nodes.size() > 0) {
+		GDLMSensor::hand_data *hd = hand_nodes.back();
+		hand_nodes.pop_back();
+		free(hd);
 	}
 }
 
@@ -136,7 +146,6 @@ void GDLMSensor::set_is_running(bool p_set) {
 	// maybe issue signal?
 	unlock();
 }
-
 
 bool GDLMSensor::get_is_connected() {
 	bool ret;
@@ -172,8 +181,8 @@ bool GDLMSensor::wait_for_connection() {
 	return get_is_connected();
 }
 
-const LEAP_TRACKING_EVENT* GDLMSensor::get_last_frame() {
-	const LEAP_TRACKING_EVENT* ret;
+const LEAP_TRACKING_EVENT *GDLMSensor::get_last_frame() {
+	const LEAP_TRACKING_EVENT *ret;
 
 	lock();
 	ret = last_frame;
@@ -182,14 +191,14 @@ const LEAP_TRACKING_EVENT* GDLMSensor::get_last_frame() {
 	return ret;
 }
 
-void GDLMSensor::set_last_frame(const LEAP_TRACKING_EVENT* p_frame) {
+void GDLMSensor::set_last_frame(const LEAP_TRACKING_EVENT *p_frame) {
 	lock();
 	last_frame = p_frame;
 	unlock();
 }
 
-const LEAP_DEVICE_INFO* GDLMSensor::get_last_device() {
-	const LEAP_DEVICE_INFO* ret;
+const LEAP_DEVICE_INFO *GDLMSensor::get_last_device() {
+	const LEAP_DEVICE_INFO *ret;
 
 	lock();
 	ret = last_device;
@@ -198,7 +207,7 @@ const LEAP_DEVICE_INFO* GDLMSensor::get_last_device() {
 	return ret;
 }
 
-void GDLMSensor::set_last_device(const LEAP_DEVICE_INFO* p_device) {
+void GDLMSensor::set_last_device(const LEAP_DEVICE_INFO *p_device) {
 	lock();
 
 	if (last_device != NULL) {
@@ -206,20 +215,20 @@ void GDLMSensor::set_last_device(const LEAP_DEVICE_INFO* p_device) {
 		free(last_device->serial);
 	} else {
 		// allocate memory to store our device in
-		last_device = (LEAP_DEVICE_INFO *) malloc(sizeof(*p_device));
+		last_device = (LEAP_DEVICE_INFO *)malloc(sizeof(*p_device));
 	}
 
 	// make a copy of our settings
 	*last_device = *p_device;
 
 	// but allocate our own buffer for the serial number
-	last_device->serial = (char *) malloc(p_device->serial_length);
+	last_device->serial = (char *)malloc(p_device->serial_length);
 	memcpy(last_device->serial, p_device->serial, p_device->serial_length);
 
 	unlock();
 }
 
-bool GDLMSensor::get_arvr() {
+bool GDLMSensor::get_arvr() const {
 	return arvr;
 }
 
@@ -239,7 +248,7 @@ void GDLMSensor::set_arvr(bool p_set) {
 	}
 }
 
-float GDLMSensor::get_smooth_factor() {
+float GDLMSensor::get_smooth_factor() const {
 	return smooth_factor;
 }
 
@@ -247,7 +256,23 @@ void GDLMSensor::set_smooth_factor(float p_smooth_factor) {
 	smooth_factor = p_smooth_factor;
 }
 
-Transform GDLMSensor::get_hmd_to_leap_motion() {
+int GDLMSensor::get_keep_frames() const {
+	return keep_hands_for_frames;
+}
+
+void GDLMSensor::set_keep_frames(int p_keep_frames) {
+	keep_hands_for_frames = p_keep_frames;
+}
+
+bool GDLMSensor::get_keep_last_hand() const {
+	return keep_last_hand;
+}
+
+void GDLMSensor::set_keep_last_hand(bool p_keep_hand) {
+	keep_last_hand = p_keep_hand;
+}
+
+Transform GDLMSensor::get_hmd_to_leap_motion() const {
 	return hmd_to_leap_motion;
 }
 
@@ -255,15 +280,33 @@ void GDLMSensor::set_hmd_to_leap_motion(Transform p_transform) {
 	hmd_to_leap_motion = p_transform;
 }
 
-void GDLMSensor::set_left_hand_scene(Ref<PackedScene> p_resource) {
-	hand_scenes[0] = p_resource;
+String GDLMSensor::get_left_hand_scene() const {
+	return hand_scene_names[0];
 }
 
-void GDLMSensor::set_right_hand_scene(Ref<PackedScene> p_resource) {
-	hand_scenes[1] = p_resource;
+void GDLMSensor::set_left_hand_scene(String p_resource) {
+	if (hand_scene_names[0] != p_resource) {
+		hand_scene_names[0] = p_resource;
+
+		// maybe delay loading until we need it?
+		hand_scenes[0] = ResourceLoader::load(p_resource);
+	}
 }
 
-const char * const GDLMSensor::finger[] = {
+String GDLMSensor::get_right_hand_scene() const {
+	return hand_scene_names[1];
+}
+
+void GDLMSensor::set_right_hand_scene(String p_resource) {
+	if (hand_scene_names[1] != p_resource) {
+		hand_scene_names[1] = p_resource;
+
+		// maybe delay loading until we need it?
+		hand_scenes[1] = ResourceLoader::load(p_resource);
+	}
+}
+
+const char *const GDLMSensor::finger[] = {
 	"Thumb", "Index", "Middle", "Ring", "Pink"
 };
 
@@ -277,7 +320,7 @@ String GDLMSensor::get_finger_name(int p_idx) {
 	return finger_name;
 }
 
-const char * const GDLMSensor::finger_bone[] = {
+const char *const GDLMSensor::finger_bone[] = {
 	"Metacarpal", "Proximal", "Intermediate", "Distal"
 };
 
@@ -291,7 +334,7 @@ String GDLMSensor::get_finger_bone_name(int p_idx) {
 	return finger_bone_name;
 }
 
-void GDLMSensor::update_hand_data(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_leap_hand) {
+void GDLMSensor::update_hand_data(GDLMSensor::hand_data *p_hand_data, LEAP_HAND *p_leap_hand) {
 	Array args;
 
 	if (p_hand_data == NULL)
@@ -315,7 +358,7 @@ void GDLMSensor::update_hand_data(GDLMSensor::hand_data* p_hand_data, LEAP_HAND*
 	p_hand_data->scene->call("set_grab_strength", args);
 };
 
-void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_HAND* p_leap_hand) {
+void GDLMSensor::update_hand_position(GDLMSensor::hand_data *p_hand_data, LEAP_HAND *p_leap_hand) {
 	Transform hand_transform;
 
 	if (p_hand_data == NULL)
@@ -333,10 +376,9 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 
 	// position of our hand
 	Vector3 hand_position(
-		p_leap_hand->palm.position.x * world_scale, 
-		p_leap_hand->palm.position.y * world_scale, 
-		p_leap_hand->palm.position.z * world_scale
-	);
+			p_leap_hand->palm.position.x * world_scale,
+			p_leap_hand->palm.position.y * world_scale,
+			p_leap_hand->palm.position.z * world_scale);
 	hand_transform.set_origin(hand_position);
 
 	// get our inverse for positioning the rest of the hand
@@ -358,20 +400,19 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 
 	// lets parse our digits
 	for (int d = 0; d < 5; d++) {
-		LEAP_DIGIT* digit = &p_leap_hand->digits[d];
-		LEAP_BONE* bone = &digit->bones[0];
+		LEAP_DIGIT *digit = &p_leap_hand->digits[d];
+		LEAP_BONE *bone = &digit->bones[0];
 
 		// logic for positioning stuff
 		Transform parent_inverse = hand_inverse;
 		Vector3 up = Vector3(0.0, 1.0, 0.0);
 		Transform bone_pose;
 
-		// Our first bone provides our starting position for our first node 
+		// Our first bone provides our starting position for our first node
 		Vector3 bone_start_pos(
-			bone->prev_joint.x * world_scale,
-			bone->prev_joint.y * world_scale,
-			bone->prev_joint.z * world_scale
-		);
+				bone->prev_joint.x * world_scale,
+				bone->prev_joint.y * world_scale,
+				bone->prev_joint.z * world_scale);
 		bone_start_pos = parent_inverse.xform(bone_start_pos);
 		bone_pose.origin = bone_start_pos;
 
@@ -392,10 +433,9 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 
 				// We calculate rotation based on our next joint position
 				Vector3 bone_pos(
-					bone->next_joint.x * world_scale, 
-					bone->next_joint.y * world_scale, 
-					bone->next_joint.z * world_scale
-				);
+						bone->next_joint.x * world_scale,
+						bone->next_joint.y * world_scale,
+						bone->next_joint.z * world_scale);
 
 				// transform it based on our last locale
 				bone_pos = parent_inverse.xform(bone_pos);
@@ -434,22 +474,61 @@ void GDLMSensor::update_hand_position(GDLMSensor::hand_data* p_hand_data, LEAP_H
 		}
 	}
 
-	// do we want to do something with the arm?	
-
+	// do we want to do something with the arm?
 }
 
-GDLMSensor::hand_data* GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
-	hand_data* new_hand_data = (hand_data *) malloc(sizeof(hand_data));
+GDLMSensor::hand_data *GDLMSensor::find_hand_by_id(int p_type, uint32_t p_leap_id) {
+	for (int h = 0; h < hand_nodes.size(); h++) {
+		if ((hand_nodes[h]->type == p_type) && (hand_nodes[h]->leap_id == p_leap_id)) {
+			return hand_nodes[h];
+		}
+	}
+
+	return NULL;
+}
+
+GDLMSensor::hand_data *GDLMSensor::find_unused_hand(int p_type) {
+	for (int h = 0; h < hand_nodes.size(); h++) {
+		// note, unused_frames must be bigger then 0, else its just that we've reset this.
+		if ((hand_nodes[h]->type == p_type) && (hand_nodes[h]->active_this_frame == false) && (hand_nodes[h]->unused_frames > 0)) {
+			return hand_nodes[h];
+		}
+	}
+
+	return NULL;
+}
+
+int GDLMSensor::count_hands(int p_type, bool p_active_only) {
+	int count = 0;
+	for (int h = 0; h < hand_nodes.size(); h++) {
+		if (hand_nodes[h]->type == p_type && (hand_nodes[h]->active_this_frame || !p_active_only)) {
+			count++;
+		}
+	}
+
+	return count;
+}
+
+GDLMSensor::hand_data *GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
+	if (hand_scenes[p_type].is_null()) {
+		return NULL;
+	} else if (!hand_scenes[p_type]->can_instance()) {
+		return NULL;
+	}
+
+	hand_data *new_hand_data = (hand_data *)malloc(sizeof(hand_data));
 
 	new_hand_data->type = p_type;
 	new_hand_data->leap_id = p_leap_id;
+	new_hand_data->active_this_frame = true;
+	new_hand_data->unused_frames = 0;
 
-	new_hand_data->scene = (Spatial *) hand_scenes[p_type]->instance(); // is it safe to cast like this?
+	new_hand_data->scene = (Spatial *)hand_scenes[p_type]->instance(); // is it safe to cast like this?
 	new_hand_data->scene->set_name(String("Hand ") + String(p_type) + String(" ") + String(p_leap_id));
 	owner->add_child(new_hand_data->scene, false);
 
 	for (int d = 0; d < 5; d++) {
-		Spatial* node = (Spatial *)new_hand_data->scene->find_node(String(finger[d]), false);
+		Spatial *node = (Spatial *)new_hand_data->scene->find_node(String(finger[d]), false);
 		if (node == NULL) {
 			printf("Couldn''t find node %s\n", finger[d]);
 
@@ -472,7 +551,7 @@ GDLMSensor::hand_data* GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
 					// find our child node...
 					char node_name[256];
 					sprintf(node_name, "%s_%s", finger[d], finger_bone[b]);
-					node = (Spatial *) node->find_node(String(node_name), false);
+					node = (Spatial *)node->find_node(String(node_name), false);
 					if (node == NULL) {
 						printf("Couldn''t find node %s\n", node_name);
 					}
@@ -491,7 +570,7 @@ GDLMSensor::hand_data* GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
 	return new_hand_data;
 }
 
-void GDLMSensor::delete_hand(GDLMSensor::hand_data* p_hand_data){
+void GDLMSensor::delete_hand(GDLMSensor::hand_data *p_hand_data) {
 	// this should free everything up and invalidate it, no need to do anything more...
 	if (p_hand_data->scene != NULL) {
 		Array args;
@@ -508,12 +587,12 @@ void GDLMSensor::delete_hand(GDLMSensor::hand_data* p_hand_data){
 
 // our Godot physics process, runs within the physic thread and is responsible for updating physics related stuff
 void GDLMSensor::_physics_process(float delta) {
-	LEAP_TRACKING_EVENT* interpolated_frame = NULL;
-	const LEAP_TRACKING_EVENT* frame = NULL;
+	LEAP_TRACKING_EVENT *interpolated_frame = NULL;
+	const LEAP_TRACKING_EVENT *frame = NULL;
 	uint64_t arvr_frame_usec;
 
 	// We're getting our measurements in mm, want them in m
-	world_scale = 0.001; 
+	world_scale = 0.001;
 
 	// get some arvr stuff
 	if (arvr) {
@@ -521,7 +600,7 @@ void GDLMSensor::_physics_process(float delta) {
 		// and it will be the frame previous to the one we're rendering and it will be the frame get_hmd_transform relates to.
 		// Once we start running rendering in a separate thread last_commit_usec will still be the last frame
 		// but last_process_usec will be newer and get_hmd_transform could be more up to date.
-		// last_frame_usec will be an average. 
+		// last_frame_usec will be an average.
 		// We probably should put this whole thing into a mutex with the render thread once the time is right.
 		// For now however.... :)
 
@@ -534,7 +613,7 @@ void GDLMSensor::_physics_process(float delta) {
 	if (clock_synchronizer != NULL) {
 		uint64_t godot_usec = OS::get_ticks_msec() * 1000; // why does godot not give us usec while it records it, grmbl...
 		uint64_t leap_usec = LeapGetNow();
-		LeapUpdateRebase(clock_synchronizer, godot_usec, leap_usec);		
+		LeapUpdateRebase(clock_synchronizer, godot_usec, leap_usec);
 	}
 
 	// get our frame, either interpolated or latest
@@ -549,7 +628,7 @@ void GDLMSensor::_physics_process(float delta) {
 		eLeapRS result = LeapGetFrameSize(leap_connection, leap_target_usec, &target_frame_size);
 		if (result == eLeapRS_Success) {
 			// get some space
-			interpolated_frame = (LEAP_TRACKING_EVENT *) malloc((size_t)target_frame_size);
+			interpolated_frame = (LEAP_TRACKING_EVENT *)malloc((size_t)target_frame_size);
 			if (interpolated_frame != NULL) {
 				// and lets get our interpolated frame!!
 				result = LeapInterpolateFrame(leap_connection, leap_target_usec, interpolated_frame, target_frame_size);
@@ -566,8 +645,8 @@ void GDLMSensor::_physics_process(float delta) {
 			}
 		}
 	} else {
-		// ok lets process our last frame. Note that leap motion says it caches these so I'm assuming they 
-		// are valid for a few frames. 
+		// ok lets process our last frame. Note that leap motion says it caches these so I'm assuming they
+		// are valid for a few frames.
 		frame = get_last_frame();
 	}
 
@@ -582,50 +661,63 @@ void GDLMSensor::_physics_process(float delta) {
 
 	last_frame_id = frame->info.frame_id;
 
-	// lets process our frames...
-	// printf("Frame %lli with %i hands.\n", (long long int)frame->info.frame_id, frame->nHands);
+	// Lets process our frames...
 
-	// we check our left hands and right hands separately or we'll end up doing crazy stuff with our scenes
-	for (int hs = 0; hs < 2; hs++) {
-		if (hand_scenes[hs].is_null()) {
-			// no scene has been setup so...
-			// printf("LeapMotion - no scene for hand %i\n", hs);
-			return;
-		} else if (!hand_scenes[hs]->can_instance()) {
-			printf("LeapMotion - Hand scene for hand %i can't be instantiated!\n", hs);
-			return;
-		} else {
-			int h = 0;
+	// Mark all current hand nodes as inactive, we'll mark the ones that are active as we find they are still used
+	for (int h = 0; h < hand_nodes.size(); h++) {
+		// if its already inactive we don't want to reset unused frames.
+		if (hand_nodes[h]->active_this_frame) {
+			hand_nodes[h]->active_this_frame = false;
+			hand_nodes[h]->unused_frames = 0;
+		}
+	}
 
-			// rewrite this to use hand->id in combination with hand->type to find it in
-			// a vector or something.  
+	// process the hands we're getting from leap motion
+	for (uint32_t h = 0; h < frame->nHands; h++) {
+		LEAP_HAND *hand = &frame->pHands[h];
+		int type = hand->type == eLeapHandType_Left ? 0 : 1;
 
-			for (uint32_t fh = 0; fh < frame->nHands; fh++) {
-				LEAP_HAND* hand = &frame->pHands[fh];
-
-				if (h >= MAX_HANDS) {
-					// we already have too many...
-				} else if (hand->type == (hs == 0 ? eLeapHandType_Left : eLeapHandType_Right)) {
-					if (hand_nodes[hs][h] == NULL) {
-						hand_nodes[hs][h] = new_hand(hs, hand->id);
-					}
-
-					update_hand_data(hand_nodes[hs][h], hand);
-					update_hand_position(hand_nodes[hs][h], hand);
-
-					h++;
-				}
+		// see if we already have a scene for this hand
+		hand_data *hd = find_hand_by_id(type, hand->id);
+		if (hd == NULL) {
+			// nope? then see if we can find a hand we lost tracking for
+			hd = find_unused_hand(type);
+		}
+		if (hd == NULL) {
+			// nope? time to get a new hand
+			hd = new_hand(type, hand->id);
+			if (hd != NULL) {
+				hand_nodes.push_back(hd);
 			}
+		}
+		if (hd != NULL) {
+			// yeah! mark as used and relate to our hand
+			hd->active_this_frame = true;
+			hd->unused_frames = 0;
+			hd->leap_id = hand->id;
 
-			// remove hands we're no longer tracking, possibly add a grace period. Sometimes a hands tracking
-			// is briefly lost and we could reuse it
-			while (h < MAX_HANDS) {
-				if (hand_nodes[hs][h] != NULL) {
-					delete_hand(hand_nodes[hs][h]);
-					hand_nodes[hs][h] = NULL;
-				}
+			// and update
+			update_hand_data(hd, hand);
+			update_hand_position(hd, hand);
 
-				h++;
+			// should make sure hand is visible
+		}
+	}
+
+	// and clean up, in reverse because we may remove entries
+	for (int h = hand_nodes.size() - 1; h >= 0; h--) {
+		hand_data *hd = hand_nodes[h];
+
+		// not active?
+		if (!hd->active_this_frame) {
+			hd->unused_frames++;
+
+			// lost tracking for awhile now? remove it unless its the last one
+			if (hd->unused_frames > keep_hands_for_frames && (count_hands(hd->type) > 1 || !keep_last_hand)) {
+				delete_hand(hd);
+				hand_nodes.erase(hand_nodes.begin() + h);
+			} else {
+				// should make sure hand is invisible
 			}
 		}
 	}
@@ -640,29 +732,29 @@ void GDLMSensor::_physics_process(float delta) {
 // All methods below here are running in our thread!!
 
 /** Translates eLeapRS result codes into a human-readable string. */
-const char* GDLMSensor::ResultString(eLeapRS r) {
-	switch(r){
-		case eLeapRS_Success:                  return "eLeapRS_Success";
-		case eLeapRS_UnknownError:             return "eLeapRS_UnknownError";
-		case eLeapRS_InvalidArgument:          return "eLeapRS_InvalidArgument";
-		case eLeapRS_InsufficientResources:    return "eLeapRS_InsufficientResources";
-		case eLeapRS_InsufficientBuffer:       return "eLeapRS_InsufficientBuffer";
-		case eLeapRS_Timeout:                  return "eLeapRS_Timeout";
-		case eLeapRS_NotConnected:             return "eLeapRS_NotConnected";
-		case eLeapRS_HandshakeIncomplete:      return "eLeapRS_HandshakeIncomplete";
-		case eLeapRS_BufferSizeOverflow:       return "eLeapRS_BufferSizeOverflow";
-		case eLeapRS_ProtocolError:            return "eLeapRS_ProtocolError";
-		case eLeapRS_InvalidClientID:          return "eLeapRS_InvalidClientID";
-		case eLeapRS_UnexpectedClosed:         return "eLeapRS_UnexpectedClosed";
+const char *GDLMSensor::ResultString(eLeapRS r) {
+	switch (r) {
+		case eLeapRS_Success: return "eLeapRS_Success";
+		case eLeapRS_UnknownError: return "eLeapRS_UnknownError";
+		case eLeapRS_InvalidArgument: return "eLeapRS_InvalidArgument";
+		case eLeapRS_InsufficientResources: return "eLeapRS_InsufficientResources";
+		case eLeapRS_InsufficientBuffer: return "eLeapRS_InsufficientBuffer";
+		case eLeapRS_Timeout: return "eLeapRS_Timeout";
+		case eLeapRS_NotConnected: return "eLeapRS_NotConnected";
+		case eLeapRS_HandshakeIncomplete: return "eLeapRS_HandshakeIncomplete";
+		case eLeapRS_BufferSizeOverflow: return "eLeapRS_BufferSizeOverflow";
+		case eLeapRS_ProtocolError: return "eLeapRS_ProtocolError";
+		case eLeapRS_InvalidClientID: return "eLeapRS_InvalidClientID";
+		case eLeapRS_UnexpectedClosed: return "eLeapRS_UnexpectedClosed";
 		case eLeapRS_UnknownImageFrameRequest: return "eLeapRS_UnknownImageFrameRequest";
-		case eLeapRS_UnknownTrackingFrameID:   return "eLeapRS_UnknownTrackingFrameID";
-		case eLeapRS_RoutineIsNotSeer:         return "eLeapRS_RoutineIsNotSeer";
-		case eLeapRS_TimestampTooEarly:        return "eLeapRS_TimestampTooEarly";
-		case eLeapRS_ConcurrentPoll:           return "eLeapRS_ConcurrentPoll";
-		case eLeapRS_NotAvailable:             return "eLeapRS_NotAvailable";
-		case eLeapRS_NotStreaming:             return "eLeapRS_NotStreaming";
-		case eLeapRS_CannotOpenDevice:         return "eLeapRS_CannotOpenDevice";
-		default:                               return "unknown result type.";
+		case eLeapRS_UnknownTrackingFrameID: return "eLeapRS_UnknownTrackingFrameID";
+		case eLeapRS_RoutineIsNotSeer: return "eLeapRS_RoutineIsNotSeer";
+		case eLeapRS_TimestampTooEarly: return "eLeapRS_TimestampTooEarly";
+		case eLeapRS_ConcurrentPoll: return "eLeapRS_ConcurrentPoll";
+		case eLeapRS_NotAvailable: return "eLeapRS_NotAvailable";
+		case eLeapRS_NotStreaming: return "eLeapRS_NotStreaming";
+		case eLeapRS_CannotOpenDevice: return "eLeapRS_CannotOpenDevice";
+		default: return "unknown result type.";
 	}
 }
 
@@ -683,7 +775,7 @@ void GDLMSensor::handleConnectionLostEvent(const LEAP_CONNECTION_LOST_EVENT *con
 }
 
 void GDLMSensor::handleDeviceEvent(const LEAP_DEVICE_EVENT *device_event) {
-	// copied from the SDK, just record this, not sure yet if we need to remember any of this.. 
+	// copied from the SDK, just record this, not sure yet if we need to remember any of this..
 	LEAP_DEVICE deviceHandle;
 
 	//Open device using LEAP_DEVICE_REF from event struct.
@@ -692,7 +784,7 @@ void GDLMSensor::handleDeviceEvent(const LEAP_DEVICE_EVENT *device_event) {
 		printf("Could not open device %s.\n", ResultString(result));
 		return;
 	}
- 
+
 	//Create a struct to hold the device properties, we have to provide a buffer for the serial string
 	LEAP_DEVICE_INFO deviceProperties = { sizeof(deviceProperties) };
 
@@ -716,7 +808,7 @@ void GDLMSensor::handleDeviceEvent(const LEAP_DEVICE_EVENT *device_event) {
 	}
 
 	// log this for now
-	printf("LeapMotion - found device %s\n",deviceProperties.serial);
+	printf("LeapMotion - found device %s\n", deviceProperties.serial);
 
 	// remember this device as the last one we interacted with, we're assuming only one is attached for now.
 	set_last_device(&deviceProperties);
@@ -773,10 +865,10 @@ void GDLMSensor::handlePolicyEvent(const LEAP_POLICY_EVENT *policy_event) {
 	if (policy_event->current_policy & eLeapPolicyFlag_BackgroundFrames) {
 		printf(", background frames");
 	}
-	if (policy_event->current_policy & eLeapPolicyFlag_OptimizeHMD ) {
+	if (policy_event->current_policy & eLeapPolicyFlag_OptimizeHMD) {
 		printf(", optimised for HMD");
 	}
-	if (policy_event->current_policy & eLeapPolicyFlag_AllowPauseResume  ) {
+	if (policy_event->current_policy & eLeapPolicyFlag_AllowPauseResume) {
 		printf(", allow pause and resume");
 	}
 
@@ -806,11 +898,11 @@ void GDLMSensor::lm_main(GDLMSensor *p_sensor) {
 
 	// loop until is_running is set to false by our main process
 	while (p_sensor->get_is_running()) {
-		// poll connection, this sleeps our thread until we have a message to handle or 
+		// poll connection, this sleeps our thread until we have a message to handle or
 		unsigned int timeout = 1000;
 		result = LeapPollConnection(p_sensor->leap_connection, timeout, &msg);
 
-		// Handle messages by calling 
+		// Handle messages by calling
 		switch (msg.type) {
 			case eLeapEventType_Connection:
 				p_sensor->handleConnectionEvent(msg.connection_event);
@@ -854,4 +946,3 @@ void GDLMSensor::lm_main(GDLMSensor *p_sensor) {
 		}
 	}
 }
-
