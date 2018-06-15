@@ -839,23 +839,18 @@ void GDLMSensor::handleTrackingEvent(const LEAP_TRACKING_EVENT *tracking_event) 
 	set_last_frame(tracking_event); // support polling tracking data from different thread
 }
 
-void GDLMSensor::handleImageCompleteEvent(const LEAP_IMAGE_COMPLETE_EVENT *image_complete_event) {
-	// do something with this?
-
-	// just log for now
-	printf("LeapMotion - image complete event\n");
-}
-
-void GDLMSensor::handleImageRequestErrorEvent(const LEAP_IMAGE_FRAME_REQUEST_ERROR_EVENT *image_request_error_event) {
-	// do something with this?
-
-	// just log for now
-	printf("LeapMotion - image request error event\n");
-}
-
 void GDLMSensor::handleLogEvent(const LEAP_LOG_EVENT *log_event) {
 	// just log for now
-	printf("LeapMotion - Error %i - %lli: %s\n", log_event->Severity, log_event->Timestamp, log_event->Message);
+	printf("LeapMotion - Error %i - %lli: %s\n", log_event->severity, log_event->timestamp, log_event->message);
+}
+
+/** Called by serviceMessageLoop() when a log event is returned by LeapPollConnection(). */
+void GDLMSensor::handleLogEvents(const LEAP_LOG_EVENTS *log_events) {
+	for (int i = 0; i < (int)(log_events->nEvents); i++) {
+		const LEAP_LOG_EVENT* log_event = &log_events->events[i];
+		// just log for now
+		printf("LeapMotion - Error %i - %lli: %s\n", log_event->severity, log_event->timestamp, log_event->message);
+	}
 }
 
 void GDLMSensor::handlePolicyEvent(const LEAP_POLICY_EVENT *policy_event) {
@@ -888,6 +883,31 @@ void GDLMSensor::handleConfigResponseEvent(const LEAP_CONFIG_RESPONSE_EVENT *con
 	// just log for now
 	printf("LeapMotion - config response event\n");
 }
+
+/** Called by serviceMessageLoop() when a point mapping change event is returned by LeapPollConnection(). */
+void GDLMSensor::handleImageEvent(const LEAP_IMAGE_EVENT *image_event) {
+	// do something with this?
+
+	// just log for now
+	printf("LeapMotion - image event\n");
+}
+
+/** Called by serviceMessageLoop() when a point mapping change event is returned by LeapPollConnection(). */
+void GDLMSensor::handlePointMappingChangeEvent(const LEAP_POINT_MAPPING_CHANGE_EVENT *point_mapping_change_event) {
+	// do something with this?
+
+	// just log for now
+	printf("LeapMotion - point mapping change event\n");
+}
+
+/** Called by serviceMessageLoop() when a point mapping change event is returned by LeapPollConnection(). */
+void GDLMSensor::handleHeadPoseEvent(const LEAP_HEAD_POSE_EVENT *head_pose_event) {
+	// definately need to implement this once we add an ARVR interface for this.
+
+	// just log for now
+	printf("LeapMotion - head pose event\n");
+}
+
 
 void GDLMSensor::lm_main(GDLMSensor *p_sensor) {
 	eLeapRS result;
@@ -923,10 +943,10 @@ void GDLMSensor::lm_main(GDLMSensor *p_sensor) {
 				p_sensor->handleTrackingEvent(msg.tracking_event);
 				break;
 			case eLeapEventType_ImageComplete:
-				p_sensor->handleImageCompleteEvent(msg.image_complete_event);
+				// Ignore since 4.0.0
 				break;
 			case eLeapEventType_ImageRequestError:
-				p_sensor->handleImageRequestErrorEvent(msg.image_request_error_event);
+				// Ignore since 4.0.0
 				break;
 			case eLeapEventType_LogEvent:
 				p_sensor->handleLogEvent(msg.log_event);
@@ -939,6 +959,18 @@ void GDLMSensor::lm_main(GDLMSensor *p_sensor) {
 				break;
 			case eLeapEventType_ConfigResponse:
 				p_sensor->handleConfigResponseEvent(msg.config_response_event);
+				break;
+			case eLeapEventType_Image:
+				p_sensor->handleImageEvent(msg.image_event);
+				break;
+			case eLeapEventType_PointMappingChange:
+				p_sensor->handlePointMappingChangeEvent(msg.point_mapping_change_event);
+				break;
+			case eLeapEventType_LogEvents:
+				p_sensor->handleLogEvents(msg.log_events);
+				break;
+			case eLeapEventType_HeadPose:
+				p_sensor->handleHeadPoseEvent(msg.head_pose_event);
 				break;
 			default: {
 				// ignore

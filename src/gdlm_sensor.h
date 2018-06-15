@@ -80,12 +80,14 @@ private:
 	void handleDeviceLostEvent(const LEAP_DEVICE_EVENT *device_event);
 	void handleDeviceFailureEvent(const LEAP_DEVICE_FAILURE_EVENT *device_failure_event);
 	void handleTrackingEvent(const LEAP_TRACKING_EVENT *tracking_event);
-	void handleImageCompleteEvent(const LEAP_IMAGE_COMPLETE_EVENT *image_complete_event);
-	void handleImageRequestErrorEvent(const LEAP_IMAGE_FRAME_REQUEST_ERROR_EVENT *image_request_error_event);
 	void handleLogEvent(const LEAP_LOG_EVENT *log_event);
+	void handleLogEvents(const LEAP_LOG_EVENTS *log_events);
 	void handlePolicyEvent(const LEAP_POLICY_EVENT *policy_event);
 	void handleConfigChangeEvent(const LEAP_CONFIG_CHANGE_EVENT *config_change_event);
 	void handleConfigResponseEvent(const LEAP_CONFIG_RESPONSE_EVENT *config_response_event);
+	void handleImageEvent(const LEAP_IMAGE_EVENT *image_event);
+	void handlePointMappingChangeEvent(const LEAP_POINT_MAPPING_CHANGE_EVENT *point_mapping_change_event);
+	void handleHeadPoseEvent(const LEAP_HEAD_POSE_EVENT *head_pose_event);
 
 protected:
 	void lock();

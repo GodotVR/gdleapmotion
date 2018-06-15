@@ -10,17 +10,22 @@ You need to have Python 2.7 and Scons installed
 
 You also need to download the leap motion SDK here:
 https://developer.leapmotion.com/
-We are using the LeapC API that was added to the new Orion Beta.
+We are using the LeapC API that was added to the new Orion Beta. You will need version 4.0.0 of this API.
 
 Make sure submodules have been downloaded.
-You also need a copy of Godot 3.0.3 (out soon) or newer, the instructions below assume you have copied the godot.exe into the folder containing this readme.
+You also need a copy of Godot 3.0.3 or newer, the instructions below assume you have copied the godot.exe into the folder containing this readme.
 
 These instructions also assume you are compiling on a 64bit environment.
+
+If needed, create the godot_api.json file for your version of Godot:
+```
+godot.exe --gdnative-generate-json-api godot-cpp\godot_api.json
+```
 
 Compile the cpp bindings:
 ```
 cd godot-cpp
-scons platform=windows godotbinpath=..\godot.exe generate_bindings=yes
+scons platform=windows headers=..\godot_headers generate_bindings=yes
 cd ..
 ```
 

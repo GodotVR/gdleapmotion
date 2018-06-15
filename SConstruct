@@ -5,7 +5,7 @@ import os, subprocess
 godot_headers_path = ARGUMENTS.get("headers", "godot_headers/")
 cpp_bindings_path = ARGUMENTS.get("cpp_bindings_path", "godot-cpp/")
 cpp_bindings_library_path = ARGUMENTS.get("cpp_bindings_library", "godot-cpp/bin/godot-cpp")
-leapsdk_path = ARGUMENTS.get("leapsdk_path", "C:/Users/basti/Development/LeapDeveloperKit_3.2.1+45911_win/LeapSDK/")
+leapsdk_path = ARGUMENTS.get("leapsdk_path", "C:/Users/basti/Development/Leap_Motion_Developer_Kit_4.0.0+52173/LeapSDK/")
 
 target = ARGUMENTS.get("target", "debug")
 platform = ARGUMENTS.get("platform", "windows")
