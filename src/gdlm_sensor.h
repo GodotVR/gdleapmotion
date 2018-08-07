@@ -101,7 +101,7 @@ protected:
 	void set_is_running(bool p_set);
 	void set_is_connected(bool p_set);
 
-	bool wait_for_connection();
+	bool wait_for_connection(int timeout = 5000, int waittime = 1100);
 
 	void update_hand_data(GDLMSensor::hand_data *p_hand_data, LEAP_HAND *p_leap_hand);
 	void update_hand_position(GDLMSensor::hand_data *p_hand_data, LEAP_HAND *p_leap_hand);

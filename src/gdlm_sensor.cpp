@@ -47,6 +47,8 @@ void GDLMSensor::_register_methods() {
 }
 
 GDLMSensor::GDLMSensor() {
+	printf("Construct leap motion\n");
+
 	clock_synchronizer = NULL;
 	lm_thread = NULL;
 	is_running = false;
@@ -163,6 +165,14 @@ void GDLMSensor::set_is_connected(bool p_set) {
 		is_connected = p_set;
 		if (p_set) {
 			LeapCreateClockRebaser(&clock_synchronizer);
+
+			if (arvr) {
+				printf("Setting arvr to true\n");
+				LeapSetPolicyFlags(leap_connection, eLeapPolicyFlag_OptimizeHMD, 0);
+			} else {
+				printf("Setting arvr to false\n");
+				LeapSetPolicyFlags(leap_connection, 0, eLeapPolicyFlag_OptimizeHMD);
+			}
 		} else if (clock_synchronizer != NULL) {
 			LeapDestroyClockRebaser(clock_synchronizer);
 			clock_synchronizer = NULL;
@@ -173,9 +183,12 @@ void GDLMSensor::set_is_connected(bool p_set) {
 	unlock();
 }
 
-bool GDLMSensor::wait_for_connection() {
-	while (!get_is_connected()) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+bool GDLMSensor::wait_for_connection(int timeout, int waittime) {
+	int time_passed = 0;
+	while (!get_is_connected() && time_passed < timeout) {
+		printf("Check...\n");
+		std::this_thread::sleep_for(std::chrono::milliseconds(waittime));
+		time_passed += waittime;
 	}
 
 	return get_is_connected();
@@ -233,10 +246,11 @@ bool GDLMSensor::get_arvr() const {
 }
 
 void GDLMSensor::set_arvr(bool p_set) {
+	lock();
+
 	if (arvr != p_set) {
-		if (leap_connection != NULL) {
-			arvr = p_set;
-			wait_for_connection();
+		arvr = p_set;
+		if (is_connected) {
 			if (arvr) {
 				printf("Setting arvr to true\n");
 				LeapSetPolicyFlags(leap_connection, eLeapPolicyFlag_OptimizeHMD, 0);
@@ -246,6 +260,26 @@ void GDLMSensor::set_arvr(bool p_set) {
 			}
 		}
 	}
+
+	unlock();
+
+/*	if (arvr != p_set) {
+		if (leap_connection != NULL) {
+			printf("Wait for connection\n");
+			if (wait_for_connection()) {
+				arvr = p_set;
+				if (arvr) {
+					printf("Setting arvr to true\n");
+					LeapSetPolicyFlags(leap_connection, eLeapPolicyFlag_OptimizeHMD, 0);
+				} else {
+					printf("Setting arvr to false\n");
+					LeapSetPolicyFlags(leap_connection, 0, eLeapPolicyFlag_OptimizeHMD);
+				}				
+			} else {
+				printf("Failed to set ARVR\n");
+			}
+		}
+	}*/
 }
 
 float GDLMSensor::get_smooth_factor() const {
@@ -617,7 +651,7 @@ void GDLMSensor::_physics_process(float delta) {
 	}
 
 	// get our frame, either interpolated or latest
-	if (arvr && clock_synchronizer != NULL) {
+	if (arvr && clock_synchronizer != NULL && arvr_frame_usec != 0) {
 		// Get our leap motion clock value at the timing on which we expect our hmd_transform to be.
 		// This will never be exact science as we do not know how much of a timewarp Oculus/OpenVR has applied..
 		int64_t leap_target_usec;
@@ -759,11 +793,11 @@ const char *GDLMSensor::ResultString(eLeapRS r) {
 }
 
 void GDLMSensor::handleConnectionEvent(const LEAP_CONNECTION_EVENT *connection_event) {
-	// update our status
-	set_is_connected(true);
-
 	// log..
 	printf("LeapMotion - connected to leap motion\n");
+
+	// update our status
+	set_is_connected(true);
 }
 
 void GDLMSensor::handleConnectionLostEvent(const LEAP_CONNECTION_LOST_EVENT *connection_lost_event) {
@@ -841,15 +875,29 @@ void GDLMSensor::handleTrackingEvent(const LEAP_TRACKING_EVENT *tracking_event) 
 
 void GDLMSensor::handleLogEvent(const LEAP_LOG_EVENT *log_event) {
 	// just log for now
-	printf("LeapMotion - Error %i - %lli: %s\n", log_event->severity, log_event->timestamp, log_event->message);
+	char lvl[250];
+	switch (log_event->severity) {
+		case eLeapLogSeverity_Critical:
+			strcpy(lvl, "Critical");
+			break;
+		case eLeapLogSeverity_Warning:
+			strcpy(lvl, "Warning");
+			break;
+		case eLeapLogSeverity_Information:
+			strcpy(lvl, "Information");
+			break;
+		default:
+			strcpy(lvl, "Unknown");
+			break;
+	}
+
+	printf("LeapMotion - %s - %lli: %s\n", lvl, log_event->timestamp, log_event->message);
 }
 
 /** Called by serviceMessageLoop() when a log event is returned by LeapPollConnection(). */
 void GDLMSensor::handleLogEvents(const LEAP_LOG_EVENTS *log_events) {
 	for (int i = 0; i < (int)(log_events->nEvents); i++) {
-		const LEAP_LOG_EVENT* log_event = &log_events->events[i];
-		// just log for now
-		printf("LeapMotion - Error %i - %lli: %s\n", log_event->severity, log_event->timestamp, log_event->message);
+		handleLogEvent(&log_events->events[i]);
 	}
 }
 
@@ -913,6 +961,7 @@ void GDLMSensor::lm_main(GDLMSensor *p_sensor) {
 	eLeapRS result;
 	LEAP_CONNECTION_MESSAGE msg;
 
+	printf("Start thread\n");
 	// note, p_sensor should not be destroyed until our thread cleanly exists
 	// as that happens in the destruct of our sensor class we should be able to rely on this
 
