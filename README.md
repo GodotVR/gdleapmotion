@@ -19,13 +19,13 @@ These instructions also assume you are compiling on a 64bit environment.
 
 If needed, create the godot_api.json file for your version of Godot:
 ```
-godot.exe --gdnative-generate-json-api godot-cpp\godot_api.json
+godot.exe --gdnative-generate-json-api godot-cpp\godot_headers\api.json
 ```
 
 Compile the cpp bindings:
 ```
 cd godot-cpp
-scons platform=windows headers=..\godot_headers generate_bindings=yes
+scons platform=windows generate_bindings=yes
 cd ..
 ```
 

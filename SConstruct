@@ -2,9 +2,9 @@
 import os, subprocess
 
 # Local dependency paths, adapt them to your setup
-godot_headers_path = ARGUMENTS.get("headers", "godot_headers/")
-cpp_bindings_path = ARGUMENTS.get("cpp_bindings_path", "godot-cpp/")
-cpp_bindings_library_path = ARGUMENTS.get("cpp_bindings_library", "godot-cpp/bin/godot-cpp")
+godot_headers_path = "godot-cpp/godot_headers/"
+cpp_bindings_path = "godot-cpp/"
+cpp_bindings_library_path = "godot-cpp/bin/godot-cpp"
 leapsdk_path = ARGUMENTS.get("leapsdk_path", "C:/Users/basti/Development/Leap_Motion_Developer_Kit_4.0.0+52173/LeapSDK/")
 
 target = ARGUMENTS.get("target", "debug")
