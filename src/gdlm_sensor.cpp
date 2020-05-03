@@ -1,6 +1,6 @@
 #include "gdlm_sensor.h"
 
-#define PI 3.14159265359
+#define PI 3.14159265359f
 
 using namespace godot;
 
@@ -8,42 +8,46 @@ void GDLMSensor::_register_methods() {
 	Dictionary args;
 
 	args[Variant("hand")] = Variant(Variant::OBJECT);
-	register_signal<GDLMSensor>((char *)"new_hand", args);
-	register_signal<GDLMSensor>((char *)"about_to_remove_hand", args);
+	register_signal<GDLMSensor>("new_hand", args);
+	register_signal<GDLMSensor>("about_to_remove_hand", args);
 
-	register_method((char *)"get_is_running", &GDLMSensor::get_is_running);
-	register_method((char *)"get_is_connected", &GDLMSensor::get_is_connected);
-	register_method((char *)"get_left_hand_scene", &GDLMSensor::get_left_hand_scene);
-	register_method((char *)"set_left_hand_scene", &GDLMSensor::set_left_hand_scene);
-	register_method((char *)"get_right_hand_scene", &GDLMSensor::get_right_hand_scene);
-	register_method((char *)"set_right_hand_scene", &GDLMSensor::set_right_hand_scene);
-	register_method((char *)"get_arvr", &GDLMSensor::get_arvr);
-	register_method((char *)"set_arvr", &GDLMSensor::set_arvr);
-	register_method((char *)"get_smooth_factor", &GDLMSensor::get_smooth_factor);
-	register_method((char *)"set_smooth_factor", &GDLMSensor::set_smooth_factor);
-	register_method((char *)"get_keep_frames", &GDLMSensor::get_keep_frames);
-	register_method((char *)"set_keep_frames", &GDLMSensor::set_keep_frames);
-	register_method((char *)"get_keep_last_hand", &GDLMSensor::get_keep_last_hand);
-	register_method((char *)"set_keep_last_hand", &GDLMSensor::set_keep_last_hand);
-	register_method((char *)"get_hmd_to_leap_motion", &GDLMSensor::get_hmd_to_leap_motion);
-	register_method((char *)"set_hmd_to_leap_motion", &GDLMSensor::set_hmd_to_leap_motion);
-	register_method((char *)"_physics_process", &GDLMSensor::_physics_process);
-	register_method((char *)"get_finger_name", &GDLMSensor::get_finger_name);
-	register_method((char *)"get_finger_bone_name", &GDLMSensor::get_finger_bone_name);
+	register_method("get_is_running", &GDLMSensor::get_is_running);
+	register_method("get_is_connected", &GDLMSensor::get_is_connected);
+	register_method("get_left_hand_scene", &GDLMSensor::get_left_hand_scene);
+	register_method("set_left_hand_scene", &GDLMSensor::set_left_hand_scene);
+	register_method("get_right_hand_scene", &GDLMSensor::get_right_hand_scene);
+	register_method("set_right_hand_scene", &GDLMSensor::set_right_hand_scene);
+	register_method("get_arvr", &GDLMSensor::get_arvr);
+	register_method("set_arvr", &GDLMSensor::set_arvr);
+	register_method("get_smooth_factor", &GDLMSensor::get_smooth_factor);
+	register_method("set_smooth_factor", &GDLMSensor::set_smooth_factor);
+	register_method("get_keep_frames", &GDLMSensor::get_keep_frames);
+	register_method("set_keep_frames", &GDLMSensor::set_keep_frames);
+	register_method("get_keep_last_hand", &GDLMSensor::get_keep_last_hand);
+	register_method("set_keep_last_hand", &GDLMSensor::set_keep_last_hand);
+	register_method("get_hmd_to_leap_motion", &GDLMSensor::get_hmd_to_leap_motion);
+	register_method("set_hmd_to_leap_motion", &GDLMSensor::set_hmd_to_leap_motion);
+	register_method("_physics_process", &GDLMSensor::_physics_process);
+	register_method("get_finger_name", &GDLMSensor::get_finger_name);
+	register_method("get_finger_bone_name", &GDLMSensor::get_finger_bone_name);
 
-	register_property<GDLMSensor, bool>((char *)"arvr", &GDLMSensor::set_arvr, &GDLMSensor::get_arvr, false);
-	register_property<GDLMSensor, float>((char *)"smooth_factor", &GDLMSensor::set_smooth_factor, &GDLMSensor::get_smooth_factor, 0.5);
-	register_property<GDLMSensor, int>((char *)"keep_hands_for_frames", &GDLMSensor::set_keep_frames, &GDLMSensor::get_keep_frames, 60);
-	register_property<GDLMSensor, bool>((char *)"keep_last_hand", &GDLMSensor::set_keep_last_hand, &GDLMSensor::get_keep_last_hand, true);
+	register_property<GDLMSensor, bool>("arvr", &GDLMSensor::set_arvr, &GDLMSensor::get_arvr, false);
+	register_property<GDLMSensor, float>("smooth_factor", &GDLMSensor::set_smooth_factor, &GDLMSensor::get_smooth_factor, 0.5);
+	register_property<GDLMSensor, int>("keep_hands_for_frames", &GDLMSensor::set_keep_frames, &GDLMSensor::get_keep_frames, 60);
+	register_property<GDLMSensor, bool>("keep_last_hand", &GDLMSensor::set_keep_last_hand, &GDLMSensor::get_keep_last_hand, true);
 
-	register_property<GDLMSensor, String>((char *)"left_hand_scene", &GDLMSensor::set_left_hand_scene, &GDLMSensor::get_left_hand_scene, String());
-	register_property<GDLMSensor, String>((char *)"right_hand_scene", &GDLMSensor::set_right_hand_scene, &GDLMSensor::get_right_hand_scene, String());
+	register_property<GDLMSensor, String>("left_hand_scene", &GDLMSensor::set_left_hand_scene, &GDLMSensor::get_left_hand_scene, String());
+	register_property<GDLMSensor, String>("right_hand_scene", &GDLMSensor::set_right_hand_scene, &GDLMSensor::get_right_hand_scene, String());
 
 	// assume rotated by 90 degrees on x axis and -180 on Y and 8cm from center
 	Transform htlp;
-	htlp.basis = Basis(Vector3(90.0 * PI / 180.0, -180.0 * PI / 180.0, 0.0));
-	htlp.origin = Vector3(0.0, 0.0, -0.08);
-	register_property<GDLMSensor, Transform>((char *)"hmd_to_leap_motion", &GDLMSensor::set_hmd_to_leap_motion, &GDLMSensor::get_hmd_to_leap_motion, htlp);
+	htlp.basis = Basis(Vector3(90.0f * PI / 180.0f, -180.0f * PI / 180.0f, 0.0f));
+	htlp.origin = Vector3(0.0f, 0.0f, -0.08f);
+	register_property<GDLMSensor, Transform>("hmd_to_leap_motion", &GDLMSensor::set_hmd_to_leap_motion, &GDLMSensor::get_hmd_to_leap_motion, htlp);
+}
+
+void GDLMSensor::_init() {
+
 }
 
 GDLMSensor::GDLMSensor() {
@@ -62,8 +66,8 @@ GDLMSensor::GDLMSensor() {
 	keep_hands_for_frames = 60;
 
 	// assume rotated by 90 degrees on x axis and -180 on Y and 8cm from center
-	hmd_to_leap_motion.basis = Basis(Vector3(90.0 * PI / 180.0, -180.0 * PI / 180.0, 0.0));
-	hmd_to_leap_motion.origin = Vector3(0.0, 0.0, -0.08);
+	hmd_to_leap_motion.basis = Basis(Vector3(90.0f * PI / 180.0f, -180.0f * PI / 180.0f, 0.0f));
+	hmd_to_leap_motion.origin = Vector3(0.0f, 0.0f, -0.08f);
 
 	eLeapRS result = LeapCreateConnection(NULL, &leap_connection);
 	if (result == eLeapRS_Success) {
@@ -106,10 +110,10 @@ GDLMSensor::~GDLMSensor() {
 
 	if (last_device != NULL) {
 		// free the space we allocated for our serial number
-		free(last_device->serial);
+		::free(last_device->serial);
 
 		// free our device
-		free(last_device);
+		::free(last_device);
 		last_device = NULL;
 	}
 
@@ -120,7 +124,7 @@ GDLMSensor::~GDLMSensor() {
 	while (hand_nodes.size() > 0) {
 		GDLMSensor::hand_data *hd = hand_nodes.back();
 		hand_nodes.pop_back();
-		free(hd);
+		::free(hd);
 	}
 }
 
@@ -225,7 +229,7 @@ void GDLMSensor::set_last_device(const LEAP_DEVICE_INFO *p_device) {
 
 	if (last_device != NULL) {
 		// free the space we allocated for our serial number
-		free(last_device->serial);
+		::free(last_device->serial);
 	} else {
 		// allocate memory to store our device in
 		last_device = (LEAP_DEVICE_INFO *)malloc(sizeof(*p_device));
@@ -274,7 +278,7 @@ void GDLMSensor::set_arvr(bool p_set) {
 				} else {
 					printf("Setting arvr to false\n");
 					LeapSetPolicyFlags(leap_connection, 0, eLeapPolicyFlag_OptimizeHMD);
-				}				
+				}
 			} else {
 				printf("Failed to set ARVR\n");
 			}
@@ -323,7 +327,7 @@ void GDLMSensor::set_left_hand_scene(String p_resource) {
 		hand_scene_names[0] = p_resource;
 
 		// maybe delay loading until we need it?
-		hand_scenes[0] = ResourceLoader::load(p_resource);
+		hand_scenes[0] = ResourceLoader::get_singleton()->load(p_resource);
 	}
 }
 
@@ -336,7 +340,7 @@ void GDLMSensor::set_right_hand_scene(String p_resource) {
 		hand_scene_names[1] = p_resource;
 
 		// maybe delay loading until we need it?
-		hand_scenes[1] = ResourceLoader::load(p_resource);
+		hand_scenes[1] = ResourceLoader::get_singleton()->load(p_resource);
 	}
 }
 
@@ -559,7 +563,7 @@ GDLMSensor::hand_data *GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
 
 	new_hand_data->scene = (Spatial *)hand_scenes[p_type]->instance(); // is it safe to cast like this?
 	new_hand_data->scene->set_name(String("Hand ") + String(p_type) + String(" ") + String(p_leap_id));
-	owner->add_child(new_hand_data->scene, false);
+	add_child(new_hand_data->scene, false);
 
 	for (int d = 0; d < 5; d++) {
 		Spatial *node = (Spatial *)new_hand_data->scene->find_node(String(finger[d]), false);
@@ -599,7 +603,7 @@ GDLMSensor::hand_data *GDLMSensor::new_hand(int p_type, uint32_t p_leap_id) {
 
 	Array args;
 	args.push_back(Variant(new_hand_data->scene));
-	owner->emit_signal("new_hand", args);
+	emit_signal("new_hand", args);
 
 	return new_hand_data;
 }
@@ -609,14 +613,14 @@ void GDLMSensor::delete_hand(GDLMSensor::hand_data *p_hand_data) {
 	if (p_hand_data->scene != NULL) {
 		Array args;
 		args.push_back(Variant(p_hand_data->scene));
-		owner->emit_signal("about_to_remove_hand", args);
+		emit_signal("about_to_remove_hand", args);
 
 		// hide and then queue free, this will properly destruct our scene and remove it from our tree
 		p_hand_data->scene->hide();
 		p_hand_data->scene->queue_free();
 	}
 
-	free(p_hand_data);
+	::free(p_hand_data);
 }
 
 // our Godot physics process, runs within the physic thread and is responsible for updating physics related stuff
@@ -626,7 +630,7 @@ void GDLMSensor::_physics_process(float delta) {
 	uint64_t arvr_frame_usec;
 
 	// We're getting our measurements in mm, want them in m
-	world_scale = 0.001;
+	world_scale = 0.001f;
 
 	// get some arvr stuff
 	if (arvr) {
@@ -638,14 +642,16 @@ void GDLMSensor::_physics_process(float delta) {
 		// We probably should put this whole thing into a mutex with the render thread once the time is right.
 		// For now however.... :)
 
-		world_scale *= ARVRServer::get_world_scale();
-		hmd_transform = ARVRServer::get_hmd_transform();
-		arvr_frame_usec = ARVRServer::get_last_process_usec() + ARVRServer::get_last_frame_usec();
+		ARVRServer *arvr_server = ARVRServer::get_singleton();
+
+		world_scale *= arvr_server->get_world_scale();
+		hmd_transform = arvr_server->get_hmd_transform();
+		arvr_frame_usec = arvr_server->get_last_process_usec() + arvr_server->get_last_frame_usec();
 	}
 
 	// update our timing
 	if (clock_synchronizer != NULL) {
-		uint64_t godot_usec = OS::get_ticks_msec() * 1000; // why does godot not give us usec while it records it, grmbl...
+		uint64_t godot_usec = OS::get_singleton()->get_ticks_msec() * 1000; // why does godot not give us usec while it records it, grmbl...
 		uint64_t leap_usec = LeapGetNow();
 		LeapUpdateRebase(clock_synchronizer, godot_usec, leap_usec);
 	}
@@ -673,7 +679,7 @@ void GDLMSensor::_physics_process(float delta) {
 					// this is not good... need to add some error handling here.
 
 					// clean up so we exit..
-					free(interpolated_frame);
+					::free(interpolated_frame);
 					interpolated_frame = NULL;
 				}
 			}
@@ -758,7 +764,7 @@ void GDLMSensor::_physics_process(float delta) {
 
 	// free our buffer if we allocated it
 	if (interpolated_frame != NULL) {
-		free(interpolated_frame);
+		::free(interpolated_frame);
 	}
 }
 
@@ -836,7 +842,7 @@ void GDLMSensor::handleDeviceEvent(const LEAP_DEVICE_EVENT *device_event) {
 		result = LeapGetDeviceInfo(deviceHandle, &deviceProperties);
 		if (result != eLeapRS_Success) {
 			printf("Failed to get device info %s.\n", ResultString(result));
-			free(deviceProperties.serial);
+			::free(deviceProperties.serial);
 			return;
 		}
 	}
@@ -847,7 +853,7 @@ void GDLMSensor::handleDeviceEvent(const LEAP_DEVICE_EVENT *device_event) {
 	// remember this device as the last one we interacted with, we're assuming only one is attached for now.
 	set_last_device(&deviceProperties);
 
-	free(deviceProperties.serial);
+	::free(deviceProperties.serial);
 	LeapCloseDevice(deviceHandle);
 }
 

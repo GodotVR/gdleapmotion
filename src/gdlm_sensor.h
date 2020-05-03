@@ -23,8 +23,8 @@
 
 namespace godot {
 
-class GDLMSensor : public godot::GodotScript<Spatial> {
-	GODOT_CLASS(GDLMSensor);
+class GDLMSensor : public Spatial {
+	GODOT_CLASS(GDLMSensor, Spatial)
 
 private:
 	LEAP_CONNECTION leap_connection;
@@ -131,6 +131,7 @@ public:
 	Transform get_hmd_to_leap_motion() const;
 	void set_hmd_to_leap_motion(Transform p_transform);
 
+	void _init();
 	GDLMSensor();
 	~GDLMSensor();
 
