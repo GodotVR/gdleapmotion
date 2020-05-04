@@ -6,7 +6,8 @@ Compiling
 ---------
 
 I've only tested compiling on Windows using Visual Studio 2019.
-You need to have Python and Scons installed
+You need to have Python 3.x and Scons installed.
+As we'll be compiling using the 64bit toolset make sure you install the 64bit version of Python.
 
 You also need to download the leap motion SDK here:
 https://developer.leapmotion.com/
@@ -37,7 +38,7 @@ scons platform=windows
 
 Add `target=release` to both scons commands to build a release version of the module.
 
-The precompiled version in this repository have been compiled with Visual Studio 2019 and using the Oculus SDK 1.43.0
+The precompiled version in this repository have been compiled with Visual Studio 2019.
 You may need to install the latest Visual C++ redistributable when deploying the plugin:
 https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
 
